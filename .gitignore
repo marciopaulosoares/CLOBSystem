@@ -1,0 +1,94 @@
+# =========================
+
+# IntelliJ IDEA
+
+# =========================
+
+.idea/
+*.iml
+*.iws
+out/
+
+# Optional: keep shared configs (recommended for teams)
+
+# Uncomment if you want to share formatting / run configs
+
+# .idea/codeStyles/
+
+# .idea/inspectionProfiles/
+
+# .idea/runConfigurations/
+
+# =========================
+
+# Maven
+
+# =========================
+
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+
+# Maven wrapper (KEEP these)
+
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+!mvnw
+!mvnw.cmd
+
+# =========================
+
+# Java / JVM
+
+# =========================
+
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# =========================
+
+# Logs
+
+# =========================
+
+logs/
+*.log
+
+# =========================
+
+# OS Files
+
+# =========================
+
+.DS_Store
+Thumbs.db
+
+# =========================
+
+# Environment / Secrets
+
+# =========================
+
+.env
+.env.*
+*.key
+*.pem
+
+# =========================
+
+# Misc
+
+# =========================
+
+*.swp
+*.swo
+*~
+/docs/questions
+/docs/review_1
+/docs/questions/*.bkp
