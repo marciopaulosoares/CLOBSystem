@@ -1,6 +1,7 @@
 package com.mb.crypto.clob.domain;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 /**
  * Tracks available and locked (reserved) quantities of a single asset for an account.
@@ -16,7 +17,7 @@ public final class Balance {
      * Initialises balance with the given available amount and zero locked funds.
      */
     public Balance(BigDecimal available) {
-        this.available = available;
+        this.available = Objects.requireNonNull(available, "Available cannot be null");
         this.locked = BigDecimal.ZERO;
     }
 
@@ -38,32 +39,35 @@ public final class Balance {
      * Returns the total balance (available plus locked).
      */
     public BigDecimal getTotal() {
-        // TODO: implement - return available.add(locked)
-        return BigDecimal.ZERO;
+        return available.add(locked);
     }
 
     void addAvailable(BigDecimal amount) {
-        // TODO: implement - available = available.add(amount)
+        available = available.add(amount);
     }
 
     void subtractAvailable(BigDecimal amount) {
-        // TODO: implement - validate sufficient available,
-        //  then available = available.subtract(amount)
+        if (available.compareTo(amount) < 0) {
+            throw new IllegalArgumentException("Insufficient available balance");
+        }
+        available = available.subtract(amount);
     }
 
     void lock(BigDecimal amount) {
-        // TODO: implement - subtractAvailable(amount); locked = locked.add(amount)
+        subtractAvailable(amount);
+        locked = locked.add(amount);
     }
 
     void unlock(BigDecimal amount) {
-        // TODO: implement - locked = locked.subtract(amount); available = available.add(amount)
+        locked = locked.subtract(amount);
+        available = available.add(amount);
     }
 
     void debit(BigDecimal amount) {
-        // TODO: implement - locked = locked.subtract(amount) after trade execution
+        locked = locked.subtract(amount);
     }
 
     void credit(BigDecimal amount) {
-        // TODO: implement - available = available.add(amount) after trade execution
+        available = available.add(amount);
     }
 }

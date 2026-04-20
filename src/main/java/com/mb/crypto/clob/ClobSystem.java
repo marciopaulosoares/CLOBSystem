@@ -76,7 +76,9 @@ public final class ClobSystem {
         Objects.requireNonNull(accountId, "AccountId cannot be null");
         Objects.requireNonNull(asset, "Asset cannot be null");
         Objects.requireNonNull(amount, "Amount cannot be null");
-        // TODO: implement - look up account, call account.deposit(asset, amount)
+
+        accounts.computeIfAbsent(accountId, id -> new Account(id))
+            .deposit(asset, amount);
     }
 
     /**

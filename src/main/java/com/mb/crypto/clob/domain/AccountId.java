@@ -13,6 +13,10 @@ public record AccountId(String value) {
      */
     public AccountId {
         Objects.requireNonNull(value, "AccountId value cannot be null");
+
+        value = value.trim()
+            .toLowerCase(java.util.Locale.ROOT);
+
         if (value.isBlank()) {
             throw new IllegalArgumentException("AccountId value cannot be blank");
         }
