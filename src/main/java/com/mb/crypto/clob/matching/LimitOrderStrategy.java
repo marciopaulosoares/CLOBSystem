@@ -3,9 +3,15 @@ package com.mb.crypto.clob.matching;
 import com.mb.crypto.clob.domain.Account;
 import com.mb.crypto.clob.domain.AccountId;
 import com.mb.crypto.clob.domain.Order;
+import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.orderbook.OrderBook;
+
+import java.math.BigDecimal;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.NavigableMap;
 
 /**
  * Price-time priority matching strategy for LIMIT orders.
@@ -18,17 +24,53 @@ import java.util.Objects;
 public final class LimitOrderStrategy implements OrderMatcher {
 
     @Override
-    public void match(Order order, OrderBook orderBook, Map<AccountId, Account> accounts) {
-        Objects.requireNonNull(order, "Order cannot be null");
-        Objects.requireNonNull(orderBook, "OrderBook cannot be null");
-        Objects.requireNonNull(accounts, "Accounts cannot be null");
-        // TODO: implement price-time priority matching:
-        //   1. Determine opposite side map (order.getSide() == BUY ? asks : bids)
-        //   2. Iterate best price levels while a match condition holds and qty > 0
-        //   3. For each matching level deque, fill orders FIFO
-        //   4. Calculate filled quantity = min(order.getQuantity(), resting.getQuantity())
-        //   5. Call orderBook.executeTrade() or delegate to engine via callback
-        //   6. Update quantities and statuses; remove fully-filled resting orders
-        //   7. Remove empty price levels from the map
+    public List<MatchedPair> match(Order incoming, OrderBook orderBook, Map<AccountId, Account> accounts) {
+
+        List<MatchedPair> matches = new ArrayList<>();
+
+        NavigableMap<BigDecimal, ArrayDeque<Order>> book =
+            incoming.getSide() == OrderSide.BUY
+                ? orderBook.getAsks()
+                : orderBook.getBids();
+
+        while (incoming.getQuantity().compareTo(BigDecimal.ZERO) > 0 && !book.isEmpty()) {
+
+            Map.Entry<BigDecimal, ArrayDeque<Order>> bestEntry = book.firstEntry();
+
+            BigDecimal bestPrice = bestEntry.getKey();
+
+            boolean priceMatches =
+                incoming.getSide() == OrderSide.BUY
+                    ? bestPrice.compareTo(incoming.getPrice()) <= 0
+                    : bestPrice.compareTo(incoming.getPrice()) >= 0;
+
+            if (!priceMatches) {
+                break;
+            }
+
+            ArrayDeque<Order> queue = bestEntry.getValue();
+
+            while (!queue.isEmpty() && incoming.getQuantity().compareTo(BigDecimal.ZERO) > 0) {
+
+                Order resting = queue.peek();
+                BigDecimal tradedQty = incoming.getQuantity().min(resting.getQuantity());
+
+                matches.add(new MatchedPair(incoming, resting, bestPrice, tradedQty));
+
+                incoming.decreaseQuantity(tradedQty);
+                resting.decreaseQuantity(tradedQty);
+
+                if (resting.getQuantity().compareTo(BigDecimal.ZERO) == 0) {
+                    queue.poll();
+                }
+            }
+
+            if (queue.isEmpty()) {
+                OrderSide restingSide = incoming.getSide() == OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
+                orderBook.purgeEmptyLevel(bestPrice, restingSide);
+            }
+        }
+
+        return matches;
     }
 }

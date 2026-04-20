@@ -4,6 +4,8 @@ import com.mb.crypto.clob.domain.Account;
 import com.mb.crypto.clob.domain.AccountId;
 import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.orderbook.OrderBook;
+
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -13,5 +15,5 @@ import java.util.Map;
  */
 public interface OrderMatcher {
 
-    void match(Order order, OrderBook orderBook, Map<AccountId, Account> accounts);
+    List<MatchedPair> match(Order order, OrderBook orderBook, Map<AccountId, Account> accounts);
 }

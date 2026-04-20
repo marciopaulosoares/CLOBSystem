@@ -12,7 +12,7 @@ public interface MatchingEngine {
 
     void placeOrder(Order order);
 
-    void cancelOrder(long orderId, Instrument instrument);
+    void cancelOrder(Order order);
 
     OrderBook getOrderBook(Instrument instrument);
 }

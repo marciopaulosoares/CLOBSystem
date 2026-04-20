@@ -5,5 +5,7 @@ package com.mb.crypto.clob.domain;
  */
 public enum OrderStatus {
     OPEN,
-    CANCELED
+    CANCELED,
+    FILLED,
+    PARTIALLY_FILLED
 }

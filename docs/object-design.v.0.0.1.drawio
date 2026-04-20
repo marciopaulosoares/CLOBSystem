@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36">
   <diagram name="Page-1" id="jUDWBJNCKWZ-dhEtG4r-">
-    <mxGraphModel dx="1002" dy="558" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1010" dy="658" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -23,23 +23,24 @@
           <mxGeometry height="40" width="110" x="330" y="402.5" as="geometry" />
         </mxCell>
         <mxCell id="uAB5VOuJRQ75fVNj0nVV-10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="Account" vertex="1">
-          <mxGeometry height="40" width="280" x="510" y="690.5" as="geometry" />
+          <mxGeometry height="40" width="280" x="510" y="740" as="geometry" />
         </mxCell>
         <mxCell id="4VDRiSkJ3WJV6gG0pTmI-15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;" value="&lt;div&gt;&lt;span style=&quot;text-align: center; background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;- AccountId&lt;/span&gt;&amp;nbsp;id&lt;/div&gt;- Map&amp;lt;Asset, Balance&amp;gt; balancesByAsset&lt;div&gt;- List&amp;lt;Trade&amp;gt; tradeHistory&lt;/div&gt;" vertex="1">
-          <mxGeometry height="59.5" width="280" x="510" y="730.5" as="geometry" />
+          <mxGeometry height="59.5" width="280" x="510" y="780" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-50" edge="1" parent="1" source="2KBLZV84yL6wbkATZP5W-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=diamond;endFill=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="4VDRiSkJ3WJV6gG0pTmI-16">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="4VDRiSkJ3WJV6gG0pTmI-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;verticalAlign=top;" value="&lt;div&gt;+ void deposit(Asset asset, BigDecimal amount)&lt;/div&gt;&lt;div&gt;+ void withdraw(Asset asset, BigDecimal amount)&lt;/div&gt;&lt;div&gt;~ void lock(&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Asset&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;asset,&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;BigDecimal&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;amount)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;~&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;void unlock(&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Asset&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;asset,&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;BigDecimal&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;amount)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;~&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;void debit(&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Asset&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;asset,&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;BigDecimal&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;amount)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;~ void credit(Asset asset, BigDecimal amount)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;~ void recordTrade(Trade trade)&amp;nbsp;&lt;/div&gt;+&amp;nbsp;BigDecimal GetBalance(Asset asset)&lt;div&gt;+ List&amp;lt;Trade&amp;gt; getTradeHistory()&lt;/div&gt;" vertex="1">
-          <mxGeometry height="150" width="280" x="510" y="790" as="geometry" />
+          <mxGeometry height="150" width="280" x="510" y="839.5" as="geometry" />
         </mxCell>
-        <mxCell id="WbD1X7h41OhN-fdEz3TX-15" edge="1" parent="1" source="4VDRiSkJ3WJV6gG0pTmI-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="uAB5VOuJRQ75fVNj0nVV-10">
+        <mxCell id="WbD1X7h41OhN-fdEz3TX-15" edge="1" parent="1" source="4VDRiSkJ3WJV6gG0pTmI-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uAB5VOuJRQ75fVNj0nVV-10">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="460" y="175" />
-              <mxPoint x="460" y="701" />
+              <mxPoint x="460" y="760" />
             </Array>
+            <mxPoint x="410" y="770" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-31" edge="1" parent="1" source="UzTcX7bS2XZKsBFuMxgP-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;endArrow=diamond;endFill=1;" target="4VDRiSkJ3WJV6gG0pTmI-17">
@@ -79,19 +80,19 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="UzTcX7bS2XZKsBFuMxgP-25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="OrderMatcher" vertex="1">
-          <mxGeometry height="40" width="490" x="1480" y="160" as="geometry" />
+          <mxGeometry height="40" width="530" x="1480" y="160" as="geometry" />
         </mxCell>
-        <mxCell id="UzTcX7bS2XZKsBFuMxgP-26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=top;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="+ void match(Order order, OrderBook orderBook, Map&amp;lt;AccountId, Account&amp;gt; accounts)" vertex="1">
-          <mxGeometry height="30" width="490" x="1480" y="210" as="geometry" />
+        <mxCell id="UzTcX7bS2XZKsBFuMxgP-26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=top;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="+ List&amp;lt;Trade&amp;gt; match(Order order, OrderBook orderBook, Map&amp;lt;AccountId, Account&amp;gt; accounts)" vertex="1">
+          <mxGeometry height="30" width="530" x="1480" y="210" as="geometry" />
         </mxCell>
         <mxCell id="UzTcX7bS2XZKsBFuMxgP-27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
-          <mxGeometry height="10" width="490" x="1480" y="200" as="geometry" />
+          <mxGeometry height="10" width="530" x="1480" y="200" as="geometry" />
         </mxCell>
         <mxCell id="UzTcX7bS2XZKsBFuMxgP-29" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="I" vertex="1">
           <mxGeometry height="15" width="15" x="1490" y="172.5" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-15" connectable="0" parent="1" style="group" value="" vertex="1">
-          <mxGeometry height="150" width="610" x="180" y="530.5" as="geometry" />
+          <mxGeometry height="160" width="610" x="180" y="530.5" as="geometry" />
         </mxCell>
         <mxCell id="uAB5VOuJRQ75fVNj0nVV-1" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="OrderBook" vertex="1">
           <mxGeometry height="40" width="470" x="140" as="geometry" />
@@ -99,8 +100,8 @@
         <mxCell id="uAB5VOuJRQ75fVNj0nVV-2" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;" value="&lt;span class=&quot;ͼe&quot;&gt;- Instrument Instrument&lt;br&gt;-&amp;nbsp;NavigableMap&amp;lt;BigDecimal, ArrayDeque&amp;lt;Order&amp;gt;&amp;gt; bids  {DESC - highest bid first}&lt;br&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;-&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;NavigableMap&amp;lt;BigDecimal, ArrayDeque&amp;lt;Order&amp;gt;&amp;gt; asks  {ASC - lowest ask first}&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="470" x="140" y="40" as="geometry" />
         </mxCell>
-        <mxCell id="4VDRiSkJ3WJV6gG0pTmI-1" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;verticalAlign=top;" value="+ void addOrder(Order order)&lt;br&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;void cancelOrder(Order order)&lt;/div&gt;" vertex="1">
-          <mxGeometry height="40" width="470" x="140" y="100" as="geometry" />
+        <mxCell id="4VDRiSkJ3WJV6gG0pTmI-1" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;verticalAlign=top;" value="+ void addOrder(Order order)&lt;br&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;void cancelOrder(Order order)&lt;/div&gt;&lt;div&gt;-&amp;nbsp; void validateOrder(Order order)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="470" x="140" y="100" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-14" parent="2KBLZV84yL6wbkATZP5W-15" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fontColor=#000000;darkOpacity=0.05;fillColor=#FFF9B2;strokeColor=none;fillStyle=solid;direction=west;gradientDirection=north;gradientColor=#FFF2A1;shadow=1;size=20;autosizeText=1;fontSize=10;align=left;verticalAlign=top;" value="bids: TreeMap(reverseOrder())&lt;br/&gt;   Best bid = firstKey()&lt;br/&gt;&lt;br/&gt;   asks: TreeMap(naturalOrder())&lt;br/&gt;   Best ask = firstKey()" vertex="1">
           <mxGeometry height="120" width="130" as="geometry" />
@@ -171,16 +172,16 @@
           <mxGeometry height="15" width="15" x="5" y="7.5" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="LimitOrderStrategy" vertex="1">
-          <mxGeometry height="40" width="490" x="1480" y="277" as="geometry" />
+          <mxGeometry height="40" width="530" x="1480" y="277" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-33" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="C" vertex="1">
           <mxGeometry height="15" width="15" x="1490" y="289.5" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=middle;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="" vertex="1">
-          <mxGeometry height="13.25" width="490" x="1480" y="316.75" as="geometry" />
+          <mxGeometry height="13.25" width="530" x="1480" y="316.75" as="geometry" />
         </mxCell>
-        <mxCell id="2KBLZV84yL6wbkATZP5W-35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=middle;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="+ void match(Order order, OrderBook orderBook, Map&amp;lt;AccountId, Account&amp;gt; accounts)" vertex="1">
-          <mxGeometry height="30.75" width="490" x="1480" y="330" as="geometry" />
+        <mxCell id="2KBLZV84yL6wbkATZP5W-35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=middle;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="+ List&amp;lt;Trade&amp;gt; match(Order order, OrderBook orderBook, Map&amp;lt;AccountId, Account&amp;gt; accounts)" vertex="1">
+          <mxGeometry height="30.75" width="530" x="1480" y="330" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-37" edge="1" parent="1" source="2KBLZV84yL6wbkATZP5W-32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.501;entryY=1.071;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;strokeColor=default;strokeWidth=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=open;endFill=0;" target="UzTcX7bS2XZKsBFuMxgP-26">
           <mxGeometry relative="1" as="geometry" />
@@ -260,7 +261,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="TuMxPlTC_jjK7lvGjdhM-1" connectable="0" parent="1" style="group" value="" vertex="1">
-          <mxGeometry height="110" width="260" x="520" y="990" as="geometry" />
+          <mxGeometry height="110" width="260" x="520" y="1039.5" as="geometry" />
         </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-1" parent="TuMxPlTC_jjK7lvGjdhM-1" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="Balance" vertex="1">
           <mxGeometry height="40" width="260" as="geometry" />

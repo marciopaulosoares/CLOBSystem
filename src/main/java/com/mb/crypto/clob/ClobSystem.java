@@ -45,33 +45,21 @@ public final class ClobSystem {
         matchingEngine.placeOrder(order);
     }
 
-    /**
-     * Cancels an existing order identified by its id and instrument.
-     */
     public void cancelOrder(Order order) {
         Objects.requireNonNull(order, "Order cannot be null");
-        matchingEngine.cancelOrder(order.getOrderId(), order.getInstrument());
+        matchingEngine.cancelOrder(order);
     }
 
-    /**
-     * Registers a new participant account with the system.
-     */
     public void addAccount(Account account) {
         Objects.requireNonNull(account, "Account cannot be null");
         // TODO: implement - accounts.put(account.getId(), account)
     }
 
-    /**
-     * Returns the current order book snapshot for the given instrument.
-     */
     public OrderBook getOrderBook(Instrument instrument) {
         Objects.requireNonNull(instrument, "Instrument cannot be null");
         return matchingEngine.getOrderBook(instrument);
     }
 
-    /**
-     * Credits the specified account with the given asset amount (external deposit).
-     */
     public void deposit(AccountId accountId, Asset asset, BigDecimal amount) {
         Objects.requireNonNull(accountId, "AccountId cannot be null");
         Objects.requireNonNull(asset, "Asset cannot be null");
@@ -81,9 +69,6 @@ public final class ClobSystem {
             .deposit(asset, amount);
     }
 
-    /**
-     * Debits the specified account by the given asset amount (external withdrawal).
-     */
     public void withdraw(AccountId accountId, Asset asset, BigDecimal amount) {
         Objects.requireNonNull(accountId, "AccountId cannot be null");
         Objects.requireNonNull(asset, "Asset cannot be null");

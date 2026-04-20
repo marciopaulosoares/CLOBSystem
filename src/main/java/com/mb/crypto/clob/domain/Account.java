@@ -55,7 +55,7 @@ public final class Account {
         balance.subtractAvailable(amount);
     }
 
-    void lock(Asset asset, BigDecimal amount) {
+    public void lock(Asset asset, BigDecimal amount) {
         Objects.requireNonNull(asset, "Asset cannot be null");
         Objects.requireNonNull(amount, "Amount cannot be null");
         Balance balance = balancesByAsset.get(asset);
@@ -81,6 +81,23 @@ public final class Account {
         Objects.requireNonNull(asset, "Asset cannot be null");
         Objects.requireNonNull(amount, "Amount cannot be null");
         balancesByAsset.computeIfAbsent(asset, a -> new Balance(BigDecimal.ZERO)).credit(amount);
+    }
+
+    /**
+     * Atomically debits a locked balance, credits a received balance, and records the trade.
+     * Must be called within a StampedLock write section held by OrderBookEngine.
+     */
+    public void settle(Asset debitAsset, BigDecimal debitQty,
+                       Asset creditAsset, BigDecimal creditQty,
+                       Trade trade) {
+        Objects.requireNonNull(debitAsset, "Debit asset cannot be null");
+        Objects.requireNonNull(debitQty, "Debit quantity cannot be null");
+        Objects.requireNonNull(creditAsset, "Credit asset cannot be null");
+        Objects.requireNonNull(creditQty, "Credit quantity cannot be null");
+        Objects.requireNonNull(trade, "Trade cannot be null");
+        debit(debitAsset, debitQty);
+        credit(creditAsset, creditQty);
+        recordTrade(trade);
     }
 
     void recordTrade(Trade trade) {

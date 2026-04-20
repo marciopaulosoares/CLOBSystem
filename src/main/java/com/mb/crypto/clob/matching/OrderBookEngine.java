@@ -4,12 +4,19 @@ import com.mb.crypto.clob.domain.Account;
 import com.mb.crypto.clob.domain.AccountId;
 import com.mb.crypto.clob.domain.Instrument;
 import com.mb.crypto.clob.domain.Order;
+import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.domain.OrderType;
+import com.mb.crypto.clob.domain.Trade;
 import com.mb.crypto.clob.orderbook.InstrumentLockRegistry;
 import com.mb.crypto.clob.orderbook.OrderBook;
+import com.mb.crypto.clob.validators.OrderValidator;
+
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 import java.util.stream.Collectors;
 
@@ -28,10 +35,9 @@ public final class OrderBookEngine implements MatchingEngine {
     private final Map<AccountId, Account> accounts;
     private final InstrumentLockRegistry lockRegistry;
     private final Map<OrderType, OrderMatcher> matchers;
+    private final OrderValidator validator;
+    private final AtomicLong tradeIdSequence = new AtomicLong(0);
 
-    /**
-     * Initialises the engine with one order book per instrument and registers matchers.
-     */
     public OrderBookEngine(List<Instrument> instruments, Map<AccountId, Account> accounts) {
         Objects.requireNonNull(instruments, "Instruments cannot be null");
         Objects.requireNonNull(accounts, "Accounts cannot be null");
@@ -43,39 +49,64 @@ public final class OrderBookEngine implements MatchingEngine {
             OrderType.LIMIT, new LimitOrderStrategy()
         // TODO: add OrderType.MARKET -> new MarketOrderStrategy() when implemented
         );
+        this.validator = new OrderValidator();
+
     }
 
     @Override
     public void placeOrder(Order order) {
-        Objects.requireNonNull(order, "Order cannot be null");
-        OrderBook orderBook = orderBooksByInstrument.get(order.getInstrument());
-        if (orderBook == null) {
-            throw new IllegalArgumentException(
-                "No order book for instrument: " + order.getInstrument());
-        }
-        OrderMatcher matcher = matchers.get(order.getType());
-        if (matcher == null) {
-            throw new IllegalArgumentException(
-                "No matcher registered for order type: " + order.getType());
-        }
+
+        validator.validate(order);
+
         StampedLock lock = lockRegistry.getLock(order.getInstrument());
         long stamp = lock.writeLock();
         try {
-            orderBook.addOrder(order);
-            matcher.match(order, orderBook, accounts);
+            var amountToLock = order.getPrice()
+                .multiply(order.getQuantity());
+
+            Account account = accounts.get(order.getAccountId());
+            account.lock(order.getInstrument()
+                .base(), amountToLock);
+
+            OrderBook book = orderBooksByInstrument.get(order.getInstrument());
+            if (book == null) {
+                throw new IllegalArgumentException(
+                    "No order book for instrument: " + order.getInstrument());
+            }
+            OrderMatcher matcher = matchers.get(order.getType());
+            if (matcher == null) {
+                throw new IllegalArgumentException(
+                    "No matcher registered for order type: " + order.getType());
+            }
+
+            List<MatchedPair> matches = matcher.match(order, book, accounts);
+            for (MatchedPair match : matches) {
+                executeTrade(match);
+            }
+
+            if (order.getQuantity().compareTo(BigDecimal.ZERO) > 0) {
+                book.addOrder(order);
+            }
         } finally {
             lock.unlockWrite(stamp);
         }
     }
 
     @Override
-    public void cancelOrder(long orderId, Instrument instrument) {
-        Objects.requireNonNull(instrument, "Instrument cannot be null");
-        StampedLock lock = lockRegistry.getLock(instrument);
+    public void cancelOrder(Order order) {
+
+        validator.validate(order);
+
+        StampedLock lock = lockRegistry.getLock(order.getInstrument());
+
         long stamp = lock.writeLock();
         try {
-            // TODO: implement - look up Order by orderId, call orderBook.cancelOrder(order),
-            //   update order status to CANCELED, unlock reserved balance on account
+            OrderBook orderBook = orderBooksByInstrument.get(order.getInstrument());
+            if (orderBook == null) {
+                throw new IllegalArgumentException(
+                    "No order book for instrument: " + order.getInstrument());
+            }
+            orderBook.cancelOrder(order);
         } finally {
             lock.unlockWrite(stamp);
         }
@@ -83,7 +114,9 @@ public final class OrderBookEngine implements MatchingEngine {
 
     @Override
     public OrderBook getOrderBook(Instrument instrument) {
+
         Objects.requireNonNull(instrument, "Instrument cannot be null");
+
         StampedLock lock = lockRegistry.getLock(instrument);
         long stamp = lock.tryOptimisticRead();
         OrderBook result = orderBooksByInstrument.get(instrument);
@@ -98,14 +131,34 @@ public final class OrderBookEngine implements MatchingEngine {
         return result;
     }
 
-    private void executeTrade(Order incoming, Order resting) {
-        // TODO: implement trade execution:
-        //   1. Determine filled quantity = min(incoming.getQuantity(), resting.getQuantity())
-        //   2. Determine execution price = resting.getPrice() (price-time priority)
-        //   3. Build Trade record
-        //   4. Debit seller's base asset locked balance; credit buyer's base asset available
-        //   5. Debit buyer's quote asset locked balance; credit seller's quote asset available
-        //   6. Call account.recordTrade(trade) for both buyer and seller
-        //   7. Update order quantities and statuses (FILLED / partially remaining)
+    private void executeTrade(MatchedPair match) {
+        Order buyer  = match.incoming().getSide() == OrderSide.BUY ? match.incoming() : match.resting();
+        Order seller = match.incoming().getSide() == OrderSide.BUY ? match.resting()  : match.incoming();
+
+        Trade trade = new Trade(
+            tradeIdSequence.incrementAndGet(),
+            buyer.getOrderId(),
+            seller.getOrderId(),
+            match.qty(),
+            match.price(),
+            Instant.now(),
+            buyer.getAccountId(),
+            seller.getAccountId()
+        );
+
+        Instrument instrument = buyer.getInstrument();
+
+        accounts.get(seller.getAccountId())
+            .settle(instrument.base(), match.qty(), instrument.quote(), match.qty().multiply(match.price()), trade);
+
+        accounts.get(buyer.getAccountId())
+            .settle(instrument.quote(), match.qty().multiply(match.price()), instrument.base(), match.qty(), trade);
+
+        updateOrderStatus(buyer);
+        updateOrderStatus(seller);
+    }
+
+    private void updateOrderStatus(Order order) {
+        order.applyFill();
     }
 }

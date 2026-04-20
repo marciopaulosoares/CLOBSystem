@@ -6,7 +6,6 @@ import java.util.Objects;
 
 /**
  * Immutable record of a completed match between a buy order and a sell order.
- * Created by OrderBookEngine.executeTrade() and appended to both participants' accounts.
  */
 public record Trade(
     long tradeId,
@@ -18,9 +17,6 @@ public record Trade(
     AccountId buyerAccountId,
     AccountId sellerAccountId) {
 
-    /**
-     * Validates that all financial values are positive and all references are non-null.
-     */
     public Trade {
         Objects.requireNonNull(quantity, "Quantity cannot be null");
         Objects.requireNonNull(price, "Price cannot be null");

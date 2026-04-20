@@ -9,9 +9,6 @@ import java.util.Objects;
  */
 public record Instrument(Asset base, Asset quote) {
 
-    /**
-     * Validates that base and quote assets are non-null and distinct.
-     */
     public Instrument {
         Objects.requireNonNull(base, "Base asset cannot be null");
         Objects.requireNonNull(quote, "Quote asset cannot be null");
@@ -20,10 +17,15 @@ public record Instrument(Asset base, Asset quote) {
         }
     }
 
-    /**
-     * Returns the derived identifier formed by concatenating base and quote asset names.
-     */
     public String instrumentId() {
         return base.name() + quote.name();
+    }
+
+    public Asset base() {
+        return base;
+    }
+
+    public Asset quote() {
+        return quote;
     }
 }

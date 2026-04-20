@@ -2,6 +2,9 @@ package com.mb.crypto.clob.orderbook;
 
 import com.mb.crypto.clob.domain.Instrument;
 import com.mb.crypto.clob.domain.Order;
+import com.mb.crypto.clob.domain.OrderSide;
+import com.mb.crypto.clob.domain.OrderStatus;
+
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -25,51 +28,55 @@ public final class OrderBook {
     private final NavigableMap<BigDecimal, ArrayDeque<Order>> bids;
     private final NavigableMap<BigDecimal, ArrayDeque<Order>> asks;
 
-    /**
-     * Creates an empty order book for the given instrument.
-     */
+    public Instrument getInstrument() {
+        return instrument;
+    }
+    public NavigableMap<BigDecimal, ArrayDeque<Order>> getBids() {
+        return Collections.unmodifiableNavigableMap(bids);
+    }
+    public NavigableMap<BigDecimal, ArrayDeque<Order>> getAsks() {
+        return Collections.unmodifiableNavigableMap(asks);
+    }
+
     public OrderBook(Instrument instrument) {
         this.instrument = Objects.requireNonNull(instrument, "Instrument cannot be null");
         this.bids = new TreeMap<>(Comparator.reverseOrder());
         this.asks = new TreeMap<>();
     }
 
-    /**
-     * Returns the instrument this order book tracks.
-     */
-    public Instrument getInstrument() {
-        return instrument;
-    }
-
-    /**
-     * Returns an unmodifiable view of the bid side (descending price order).
-     */
-    public NavigableMap<BigDecimal, ArrayDeque<Order>> getBids() {
-        return Collections.unmodifiableNavigableMap(bids);
-    }
-
-    /**
-     * Returns an unmodifiable view of the ask side (ascending price order).
-     */
-    public NavigableMap<BigDecimal, ArrayDeque<Order>> getAsks() {
-        return Collections.unmodifiableNavigableMap(asks);
-    }
-
-    /**
-     * Adds the order to the appropriate side of the book at its limit price.
-     */
     public void addOrder(Order order) {
-        Objects.requireNonNull(order, "Order cannot be null");
-        // TODO: implement - route to bids or asks based on order.getSide(),
-        //   computeIfAbsent(price, k -> new ArrayDeque<>()).add(order)
+
+        NavigableMap<BigDecimal, ArrayDeque<Order>> side =
+            order.getSide() == OrderSide.BUY ? bids : asks;
+
+        side.computeIfAbsent(order.getPrice(), k -> new ArrayDeque<>()).add(order);
     }
 
-    /**
-     * Removes the order from the book; removes the price level if the queue becomes empty.
-     */
+    public void purgeEmptyLevel(BigDecimal price, OrderSide side) {
+        NavigableMap<BigDecimal, ArrayDeque<Order>> map = side == OrderSide.BUY ? bids : asks;
+        ArrayDeque<Order> queue = map.get(price);
+        if (queue != null && queue.isEmpty()) {
+            map.remove(price);
+        }
+    }
+
     public void cancelOrder(Order order) {
         Objects.requireNonNull(order, "Order cannot be null");
-        // TODO: implement - remove order from the correct side's deque;
-        //   remove the price-level entry if the deque becomes empty
+        OrderStatus status = order.getStatus();
+        if (status != OrderStatus.OPEN && status != OrderStatus.PARTIALLY_FILLED) {
+            throw new IllegalStateException(
+                "Order " + order.getOrderId() + " is not active: " + status);
+        }
+        NavigableMap<BigDecimal, ArrayDeque<Order>> side =
+            order.getSide() == OrderSide.BUY ? bids : asks;
+        ArrayDeque<Order> queue = side.get(order.getPrice());
+        if (queue == null || !queue.remove(order)) {
+            throw new IllegalArgumentException(
+                "Order not found in book: " + order.getOrderId());
+        }
+        if (queue.isEmpty()) {
+            side.remove(order.getPrice());
+        }
+        order.cancel();
     }
 }

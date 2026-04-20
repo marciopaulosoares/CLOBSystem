@@ -276,6 +276,77 @@ class AccountTest {
         }
     }
 
+    @Nested
+    class Settle {
+
+        @Test
+        void shouldDebitLockedBalanceOfDebitAsset() {
+            account.deposit(Asset.BRL, new BigDecimal("1000"));
+            account.lock(Asset.BRL, new BigDecimal("500"));
+            account.settle(Asset.BRL, new BigDecimal("500"), Asset.BTC, new BigDecimal("1"), sampleTrade());
+            assertEquals(new BigDecimal("500"), account.getBalance(Asset.BRL));
+            assertEquals(BigDecimal.ZERO, account.getLockedBalance(Asset.BRL));
+        }
+
+        @Test
+        void shouldCreditAvailableBalanceOfCreditAsset() {
+            account.deposit(Asset.BRL, new BigDecimal("1000"));
+            account.lock(Asset.BRL, new BigDecimal("500"));
+            account.settle(Asset.BRL, new BigDecimal("500"), Asset.BTC, new BigDecimal("1"), sampleTrade());
+            assertEquals(new BigDecimal("1"), account.getAvailableBalance(Asset.BTC));
+        }
+
+        @Test
+        void shouldRecordTradeInHistory() {
+            account.deposit(Asset.BRL, new BigDecimal("1000"));
+            account.lock(Asset.BRL, new BigDecimal("500"));
+            Trade trade = sampleTrade();
+            account.settle(Asset.BRL, new BigDecimal("500"), Asset.BTC, new BigDecimal("1"), trade);
+            assertEquals(1, account.getTradeHistory().size());
+            assertSame(trade, account.getTradeHistory().get(0));
+        }
+
+        @Test
+        void shouldApplyDebitCreditAndRecordAtomically() {
+            account.deposit(Asset.BRL, new BigDecimal("1000"));
+            account.lock(Asset.BRL, new BigDecimal("300"));
+            account.settle(Asset.BRL, new BigDecimal("300"), Asset.BTC, new BigDecimal("2"), sampleTrade());
+            assertEquals(new BigDecimal("700"), account.getBalance(Asset.BRL));
+            assertEquals(new BigDecimal("2"), account.getBalance(Asset.BTC));
+            assertEquals(1, account.getTradeHistory().size());
+        }
+
+        @Test
+        void shouldRejectNullDebitAsset() {
+            assertThrows(NullPointerException.class,
+                () -> account.settle(null, BigDecimal.ONE, Asset.BTC, BigDecimal.ONE, sampleTrade()));
+        }
+
+        @Test
+        void shouldRejectNullDebitQty() {
+            assertThrows(NullPointerException.class,
+                () -> account.settle(Asset.BRL, null, Asset.BTC, BigDecimal.ONE, sampleTrade()));
+        }
+
+        @Test
+        void shouldRejectNullCreditAsset() {
+            assertThrows(NullPointerException.class,
+                () -> account.settle(Asset.BRL, BigDecimal.ONE, null, BigDecimal.ONE, sampleTrade()));
+        }
+
+        @Test
+        void shouldRejectNullCreditQty() {
+            assertThrows(NullPointerException.class,
+                () -> account.settle(Asset.BRL, BigDecimal.ONE, Asset.BTC, null, sampleTrade()));
+        }
+
+        @Test
+        void shouldRejectNullTrade() {
+            assertThrows(NullPointerException.class,
+                () -> account.settle(Asset.BRL, BigDecimal.ONE, Asset.BTC, BigDecimal.ONE, null));
+        }
+    }
+
     private Trade sampleTrade() {
         return new Trade(1L, 10L, 20L,
             new BigDecimal("0.5"), new BigDecimal("150000"),

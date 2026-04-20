@@ -1,5 +1,7 @@
 package com.mb.crypto.clob.domain;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Objects;
@@ -7,14 +9,27 @@ import java.util.Objects;
 /**
  * Represents an order resting in or submitted to the order book.
  *
- * <p>Thread-safety: {@code status} and {@code quantity} are {@code volatile} to allow
- * safe lock-free reads. All writes must occur within a StampedLock write section
- * held by OrderBookEngine.
- *
- * <p>TODO: Consider VarHandle for compareAndSet updates to status and quantity
- * to enable fully lock-free partial-fill and cancellation paths.
+ * <p>Thread-safety: {@code status}, {@code quantity}, and {@code updatedAt} are written
+ * exclusively through VarHandle CAS operations. Reads remain plain volatile reads via
+ * the field declarations. All writes must occur within a StampedLock write section held
+ * by OrderBookEngine, or via the lock-free CAS paths for status/quantity transitions.
  */
 public final class Order {
+
+    private static final VarHandle STATUS;
+    private static final VarHandle UPDATED_AT;
+    private static final VarHandle QUANTITY;
+
+    static {
+        try {
+            MethodHandles.Lookup lookup = MethodHandles.lookup();
+            STATUS     = lookup.findVarHandle(Order.class, "status",    OrderStatus.class);
+            UPDATED_AT = lookup.findVarHandle(Order.class, "updatedAt", Instant.class);
+            QUANTITY   = lookup.findVarHandle(Order.class, "quantity",  BigDecimal.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     private final long orderId;
     private final OrderSide side;
@@ -56,74 +71,63 @@ public final class Order {
         this.status = OrderStatus.OPEN;
     }
 
-    /**
-     * Returns the unique order identifier.
-     */
     public long getOrderId() {
         return orderId;
     }
-
-    /**
-     * Returns the order side (BUY or SELL).
-     */
     public OrderSide getSide() {
         return side;
     }
-
-    /**
-     * Returns the limit price.
-     */
     public BigDecimal getPrice() {
         return price;
     }
-
-    /**
-     * Returns the current remaining quantity.
-     */
     public BigDecimal getQuantity() {
         return quantity;
     }
-
-    /**
-     * Returns the timestamp when this order was created.
-     */
     public Instant getCreatedAt() {
         return createdAt;
     }
-
-    /**
-     * Returns the timestamp of the most recent update to this order.
-     */
     public Instant getUpdatedAt() {
         return updatedAt;
     }
-
-    /**
-     * Returns the current order status.
-     */
     public OrderStatus getStatus() {
         return status;
     }
-
-    /**
-     * Returns the order type (LIMIT or MARKET).
-     */
     public OrderType getType() {
         return type;
     }
-
-    /**
-     * Returns the identifier of the account that submitted this order.
-     */
     public AccountId getAccountId() {
         return accountId;
     }
-
-    /**
-     * Returns the instrument this order is for.
-     */
     public Instrument getInstrument() {
         return instrument;
+    }
+
+    public void cancel() {
+        updateStatus(OrderStatus.OPEN, OrderStatus.CANCELED);
+    }
+
+    public void applyFill() {
+        if (quantity.compareTo(BigDecimal.ZERO) == 0) {
+            if (!updateStatus(OrderStatus.OPEN, OrderStatus.FILLED)) {
+                updateStatus(OrderStatus.PARTIALLY_FILLED, OrderStatus.FILLED);
+            }
+        } else {
+            updateStatus(OrderStatus.OPEN, OrderStatus.PARTIALLY_FILLED);
+        }
+    }
+
+    public void decreaseQuantity(BigDecimal amount) {
+        updateQuantity(quantity.subtract(amount));
+    }
+
+    boolean updateStatus(OrderStatus expected, OrderStatus newStatus) {
+        Objects.requireNonNull(expected, "Expected status cannot be null");
+        Objects.requireNonNull(newStatus, "New status cannot be null");
+        boolean updated = STATUS.compareAndSet(this, expected, newStatus);
+        if (updated) {
+            UPDATED_AT.setVolatile(this, Instant.now());
+        }
+        return updated;
     }
 
     void updateQuantity(BigDecimal newQuantity) {
@@ -131,15 +135,11 @@ public final class Order {
         if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Quantity cannot be negative");
         }
-        // TODO: Consider VarHandle.setVolatile for lock-free update
-        this.quantity = newQuantity;
-        this.updatedAt = Instant.now();
-    }
 
-    void updateStatus(OrderStatus newStatus) {
-        Objects.requireNonNull(newStatus, "Status cannot be null");
-        // TODO: Consider VarHandle.setVolatile for lock-free update
-        this.status = newStatus;
-        this.updatedAt = Instant.now();
+        boolean updated = QUANTITY.compareAndSet(this, quantity, newQuantity);
+        if (updated) {
+            QUANTITY.setVolatile(this, newQuantity);
+            UPDATED_AT.setVolatile(this, Instant.now());
+        }
     }
 }

@@ -28,16 +28,10 @@ public final class Balance {
         return available;
     }
 
-    /**
-     * Returns the currently locked (reserved) amount.
-     */
     public BigDecimal getLocked() {
         return locked;
     }
 
-    /**
-     * Returns the total balance (available plus locked).
-     */
     public BigDecimal getTotal() {
         return available.add(locked);
     }
