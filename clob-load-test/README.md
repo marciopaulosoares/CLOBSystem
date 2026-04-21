@@ -1,3 +1,51 @@
+# Example Report
+================================================================================
+CLOB LOAD TEST REPORT
+================================================================================
+Generated: 2026-04-21 15:58:32
+
+LOAD CONFIGURATION
+--------------------------------------------------------------------------------
+	Thread Count:              20
+	Test Duration:            60 seconds
+	Target Throughput:        5000 orders/sec
+	Number of Accounts:       100
+
+MARKET BEHAVIOR CONFIGURATION
+--------------------------------------------------------------------------------
+	Base Price:               $100.00
+	Price Spread:             $0.50
+	Price Volatility:         2.00%
+	Initial Liquidity Depth:  1000 orders
+
+OPERATION DISTRIBUTION
+--------------------------------------------------------------------------------
+	New Orders:               70%
+	Cancellations:            20%
+	Queries:                  10%
+
+TEST RESULTS
+--------------------------------------------------------------------------------
+	Actual Test Duration:     60 seconds
+
+ORDER STATISTICS
+--------------------------------------------------------------------------------
+	Total Orders Submitted:   263,480
+	Fully Executed:           66,309
+	Partially Executed:       6,499
+	Total Executed:           72,808
+	Canceled:                 15,447
+	Failed Operations:        0
+
+PERFORMANCE METRICS
+--------------------------------------------------------------------------------
+	Execution Rate:           27.63%
+	Throughput:               4391.33 orders/sec
+	Average Latency:          0.4725 ms
+	P95 Latency:              1.1965 ms
+	P99 Latency:              2.1529 ms
+
+================================================================================
 # CLOB Load Test
 
 Load testing tool for the Central Limit Order Book system.
