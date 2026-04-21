@@ -65,7 +65,7 @@ public final class Account {
         balance.lock(amount);
     }
 
-    void unlock(Asset asset, BigDecimal amount) {
+    public void unlock(Asset asset, BigDecimal amount) {
         Objects.requireNonNull(asset, "Asset cannot be null");
         Objects.requireNonNull(amount, "Amount cannot be null");
         balancesByAsset.get(asset).unlock(amount);

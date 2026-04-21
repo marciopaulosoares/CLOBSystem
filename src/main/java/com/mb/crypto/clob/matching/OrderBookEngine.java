@@ -108,6 +108,14 @@ public final class OrderBookEngine implements MatchingEngine {
                     "No order book for instrument: " + order.getInstrument());
             }
             orderBook.cancelOrder(order);
+
+            Account account = accounts.get(order.getAccountId());
+            if (order.getSide() == OrderSide.BUY) {
+                account.unlock(order.getInstrument().quote(),
+                    order.getPrice().multiply(order.getQuantity()));
+            } else {
+                account.unlock(order.getInstrument().base(), order.getQuantity());
+            }
         } finally {
             lock.unlockWrite(stamp);
         }

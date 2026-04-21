@@ -398,6 +398,45 @@ class ClobSystemTest {
             system.placeOrder(bid);
             assertThrows(IllegalStateException.class, () -> system.cancelOrder(bid));
         }
+
+        @Test
+        void shouldUnlockQuoteAssetOnBuyOrderCancel() {
+            BigDecimal brlBefore = alice.getAvailableBalance(Asset.BRL);
+            Order bid = aliceBuy(1, "300000", "1");
+            system.placeOrder(bid);
+            // BRL is locked after placeOrder
+            assertEquals(new BigDecimal("300000"), alice.getLockedBalance(Asset.BRL));
+            system.cancelOrder(bid);
+            // locked BRL must be fully returned to available
+            assertEquals(BigDecimal.ZERO, alice.getLockedBalance(Asset.BRL));
+            assertEquals(brlBefore, alice.getAvailableBalance(Asset.BRL));
+        }
+
+        @Test
+        void shouldUnlockBaseAssetOnSellOrderCancel() {
+            BigDecimal btcBefore = bob.getAvailableBalance(Asset.BTC);
+            Order ask = bobSell(10, "300000", "2");
+            system.placeOrder(ask);
+            // BTC qty=2 is locked after placeOrder
+            assertEquals(new BigDecimal("2"), bob.getLockedBalance(Asset.BTC));
+            system.cancelOrder(ask);
+            // locked BTC must be fully returned to available
+            assertEquals(BigDecimal.ZERO, bob.getLockedBalance(Asset.BTC));
+            assertEquals(btcBefore, bob.getAvailableBalance(Asset.BTC));
+        }
+
+        @Test
+        void shouldUnlockRemainingFundsOnPartiallyFilledBuyOrderCancel() {
+            // Bob's sell partially fills Alice's buy (2 out of 5 BTC)
+            system.placeOrder(bobSell(10, "300000", "2"));
+            Order bid = aliceBuy(1, "300000", "5");
+            system.placeOrder(bid);
+            assertEquals(OrderStatus.PARTIALLY_FILLED, bid.getStatus());
+            // remaining qty=3 still locked at limit price: 3 × 300000 = 900000 BRL
+            assertEquals(new BigDecimal("900000"), alice.getLockedBalance(Asset.BRL));
+            system.cancelOrder(bid);
+            assertEquals(BigDecimal.ZERO, alice.getLockedBalance(Asset.BRL));
+        }
     }
 
     @Nested
