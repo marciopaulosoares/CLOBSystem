@@ -1,3 +1,13 @@
+# CLOB System Documentation
+
+For a detailed overview of the core Central Limit Order Book (CLOB) system, including architecture, domain model, and implementation details, see the [clob-system/README.md](clob-system/README.md).
+
+This document covers:
+- System architecture and design
+- Domain model (accounts, orders, trades, etc.)
+- Key classes and their responsibilities
+- How to run and test the core system
+- Additional documentation and diagrams
 # CLOB System
 
 ## Overview
