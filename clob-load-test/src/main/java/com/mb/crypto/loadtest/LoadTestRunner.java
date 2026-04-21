@@ -3,6 +3,7 @@ package com.mb.crypto.loadtest;
 import com.mb.crypto.clob.ClobSystem;
 import com.mb.crypto.clob.domain.*;
 import io.github.cdimascio.dotenv.Dotenv;
+import static com.mb.crypto.clob.domain.Scales.QUANTITY_SCALE;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,8 +123,8 @@ public class LoadTestRunner {
                 Order order = new Order(
                         orderIdCounter.getAndIncrement(),
                         side,
-                        BigDecimal.valueOf(priceUnits),
-                        BigDecimal.ONE,
+                        priceUnits,
+                        QUANTITY_SCALE,
                         OrderType.LIMIT,
                         new AccountId("account_" + (i % accounts)),
                         INSTRUMENT
@@ -203,8 +204,8 @@ public class LoadTestRunner {
         return new Order(
                 orderIdCounter.getAndIncrement(),
                 data.side,
-                BigDecimal.valueOf(priceUnits),
-                BigDecimal.valueOf(data.quantity),
+                priceUnits,
+                (long) data.quantity * QUANTITY_SCALE,
                 OrderType.LIMIT,
                 new AccountId(data.accountId),
                 INSTRUMENT

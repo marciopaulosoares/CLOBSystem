@@ -29,8 +29,8 @@
         <!-- Main CLOB system dependency -->
         <dependency>
             <groupId>com.mb.crypto</groupId>
-            <artifactId>clob</artifactId>
-            <version>1.0-SNAPSHOT</version>
+            <artifactId>clob-system</artifactId>
+            <version>1.1-SNAPSHOT</version>
         </dependency>
 
         <!-- Logging -->
