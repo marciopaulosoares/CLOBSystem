@@ -1,0 +1,104 @@
+# CLOB Load Test Configuration Example
+# This file shows all available configuration parameters with descriptions
+
+# =============================================================================
+# THREAD CONFIGURATION
+# =============================================================================
+
+# Number of concurrent threads to spawn for load testing
+# Higher values increase concurrency but may impact system resources
+# Typical range: 5-200
+THREAD_COUNT=20
+
+# Test duration in seconds
+# How long the load test will run
+# Typical range: 10-3600 (10 seconds to 1 hour)
+TEST_DURATION_SECONDS=60
+
+# =============================================================================
+# ORDER GENERATION
+# =============================================================================
+
+# Target orders to generate per second
+# The framework will throttle order generation to match this rate
+# Typical range: 100-10000+ (depending on system capability)
+ORDERS_PER_SECOND=5000
+
+# Number of unique trading accounts to simulate
+# Orders will be randomly assigned to these accounts
+# Typical range: 10-1000
+NUMBER_OF_ACCOUNTS=100
+
+# =============================================================================
+# MARKET BEHAVIOR
+# =============================================================================
+
+# Base price for orders in the market
+# Orders will fluctuate around this price based on volatility
+# Value: positive float (e.g., 100.0, 50.5, 1000.0)
+BASE_PRICE=100.0
+
+# Bid-ask spread in dollars
+# Controls the difference between buy and sell prices
+# Typical range: 0.01-1.0
+PRICE_SPREAD=0.5
+
+# Price volatility as a percentage
+# Controls random price movements (±volatility%)
+# Example: 2.0 means prices can move ±2% from base price
+# Typical range: 0.5-10.0
+PRICE_VOLATILITY=2.0
+
+# =============================================================================
+# ORDER BOOK
+# =============================================================================
+
+# Initial number of orders to preload into the order book
+# Provides liquidity at test start
+# Typical range: 100-10000
+INITIAL_LIQUIDITY_DEPTH=1000
+
+# =============================================================================
+# OPERATION DISTRIBUTION
+# =============================================================================
+
+# Percentage of operations that are NEW orders (must-sum-to-100 with others)
+# Typical range: 50-90
+NEW_ORDER_PERCENTAGE=70
+
+# Percentage of operations that are CANCELLATIONS (must-sum-to-100 with others)
+# Typical range: 5-30
+CANCEL_PERCENTAGE=20
+
+# Percentage of operations that are QUERIES (must-sum-to-100 with others)
+# Typical range: 5-20
+# NOTE: NEW_ORDER_PERCENTAGE + CANCEL_PERCENTAGE + QUERY_PERCENTAGE should = 100
+QUERY_PERCENTAGE=10
+
+# =============================================================================
+# USAGE EXAMPLES
+# =============================================================================
+
+# Light Load Test
+# THREAD_COUNT=5
+# TEST_DURATION_SECONDS=30
+# ORDERS_PER_SECOND=500
+# NUMBER_OF_ACCOUNTS=20
+
+# Medium Load Test  
+# THREAD_COUNT=20
+# TEST_DURATION_SECONDS=60
+# ORDERS_PER_SECOND=5000
+# NUMBER_OF_ACCOUNTS=100
+
+# Heavy Load Test
+# THREAD_COUNT=50
+# TEST_DURATION_SECONDS=120
+# ORDERS_PER_SECOND=10000
+# NUMBER_OF_ACCOUNTS=500
+
+# Stress Test (Production-like)
+# THREAD_COUNT=100
+# TEST_DURATION_SECONDS=300
+# ORDERS_PER_SECOND=50000
+# NUMBER_OF_ACCOUNTS=1000

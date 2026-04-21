@@ -1,0 +1,179 @@
+Create a **separate Java project** (using Maven or Gradle) dedicated to load testing, located in a different folder from the main system (e.g., `/home/marciodev/projects/clob-load-test`).
+
+This project must integrate with the existing class:
+
+`/home/marciodev/projects/mb-crypto/src/main/java/com/mb/crypto/clob/ClobSystem.java`
+
+## Objective
+
+Simulate a real-world high-throughput environment for a Central Limit Order Book (CLOB), sending concurrent orders and measuring system performance under configurable load and market conditions.
+
+---
+
+## Requirements
+
+### 1. Project Structure
+
+* The project must be completely independent (separate folder and build configuration)
+* Provide a runnable `main()` entry point
+* Organize code into clear classes:
+
+  * `LoadTestRunner`
+  * `OrderGenerator`
+  * `LoadProfile` (NEW)
+  * `MetricsCollector`
+  * `ReportGenerator`
+
+---
+
+### 2. Integration with ClobSystem
+
+* Use the real `ClobSystem` class (no mocks)
+* Simulate real operations:
+
+  * create order
+  * cancel order
+  * matching execution
+
+---
+
+### 3. Configurable Load Profile (IMPORTANT)
+
+Create a configuration object `LoadProfile` that allows the user to define:
+
+* `threadCount`
+* `testDurationSeconds`
+* `ordersPerSecond`
+* `numberOfAccounts`
+
+#### Market behavior tuning (controls "success rate" indirectly):
+
+* `priceSpread` (tight spread → more matches, wide spread → fewer matches)
+* `priceVolatility` (random variation)
+* `initialLiquidityDepth` (preload book with orders)
+
+#### Operation distribution:
+
+* `newOrderPercentage` (e.g., 70)
+* `cancelPercentage` (e.g., 20)
+* `queryPercentage` (e.g., 10)
+
+---
+
+### 4. Order Generation Strategy
+
+`OrderGenerator` must:
+
+* Generate realistic buy/sell orders
+* Use a price model:
+
+  * Base price ± volatility
+  * Respect spread configuration
+* Simulate accounts placing multiple orders
+* Optionally preload the order book to simulate liquidity
+
+---
+
+### 5. Concurrency Model
+
+* Use:
+
+  * `ExecutorService` OR Virtual Threads (Java 21+)
+* Ensure high contention scenario
+* Avoid artificial synchronization that hides real issues
+
+---
+
+### 6. Metrics (MANDATORY)
+
+Capture:
+
+* Total orders submitted
+
+* Orders fully executed
+
+* Orders partially executed
+
+* Orders canceled
+
+* Failed operations
+
+* Throughput (orders/sec)
+
+* Latency:
+
+  * average
+  * p95
+  * p99
+
+* Derived metric:
+
+  * **Execution rate (%) = executed orders / total orders**
+
+---
+
+### 7. Reporting
+
+* Print summary to console
+* Save report to:
+  `logs/report.txt`
+
+Include:
+
+* Load configuration used
+* All metrics
+* Execution rate
+
+---
+
+### 8. Error Handling
+
+* Capture all exceptions
+* Detect:
+
+  * thread starvation
+  * possible deadlocks
+* Log errors to:
+  `logs/errors.log`
+
+---
+
+### 9. Logging
+
+* Use SLF4J + Logback (or java.util.logging)
+* Separate:
+
+  * execution logs
+  * error logs
+
+---
+
+### 10. Performance Guidelines
+
+* Use `System.nanoTime()` for latency
+* Use `AtomicLong` / `LongAdder` for counters
+* Minimize locking
+* Avoid unnecessary object creation in hot paths
+
+---
+
+### 11. Expected Output
+
+* Complete project structure
+* Runnable main class
+* Example configuration
+* Example output report
+
+---
+
+## Important Note
+
+Do NOT artificially force a fixed "success rate".
+
+Instead, the execution rate must naturally emerge from:
+
+* price distribution
+* liquidity
+* order flow
+
+The system should allow the user to influence this behavior via configuration, not hardcode it.

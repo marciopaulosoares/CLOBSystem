@@ -26,9 +26,6 @@ public final class ClobSystem {
     private final MatchingEngine matchingEngine;
     private final Map<AccountId, Account> accounts;
 
-    /**
-     * Creates the system from the given list of tradeable instruments and participant accounts.
-     */
     public ClobSystem(List<Instrument> instruments, List<Account> accounts) {
         Objects.requireNonNull(instruments, "Instruments cannot be null");
         Objects.requireNonNull(accounts, "Accounts cannot be null");
@@ -37,9 +34,6 @@ public final class ClobSystem {
         this.matchingEngine = new OrderBookEngine(instruments, this.accounts);
     }
 
-    /**
-     * Submits an order to the matching engine for execution.
-     */
     public void placeOrder(Order order) {
         Objects.requireNonNull(order, "Order cannot be null");
         matchingEngine.placeOrder(order);
@@ -52,7 +46,7 @@ public final class ClobSystem {
 
     public void addAccount(Account account) {
         Objects.requireNonNull(account, "Account cannot be null");
-        // TODO: implement - accounts.put(account.getId(), account)
+        accounts.putIfAbsent(account.getId(), account);
     }
 
     public OrderBook getOrderBook(Instrument instrument) {
