@@ -85,7 +85,7 @@ public final class OrderBookEngine implements MatchingEngine {
                 executeTrade(match);
             }
 
-            if (order.getQuantity().compareTo(BigDecimal.ZERO) > 0) {
+            if (order.getQuantityLong() > 0) {
                 book.addOrder(order);
             }
         } finally {

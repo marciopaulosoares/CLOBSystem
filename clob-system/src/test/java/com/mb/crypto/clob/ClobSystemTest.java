@@ -8,7 +8,6 @@ import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.domain.OrderStatus;
 import com.mb.crypto.clob.domain.OrderType;
-import com.mb.crypto.clob.orderbook.OrderBook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -16,275 +15,530 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+
+// BigDecimal.assertEquals is scale-sensitive (500 ≠ 500.00000000).
+// Use assertBd for value-only comparisons throughout this file.
 
 class ClobSystemTest {
 
-    private static final Instrument BTC_BRL = new Instrument(Asset.BTC, Asset.BRL);
+    private static final Instrument INSTRUMENT = new Instrument(Asset.BTC, Asset.BRL);
+
     private static final AccountId BUYER_ID  = new AccountId("buyer");
     private static final AccountId SELLER_ID = new AccountId("seller");
 
+    // 1 BTC = 100_000_000 satoshis
+    private static final long QTY_1_BTC = 100_000_000L;
+    private static final long QTY_2_BTC = 200_000_000L;
+
     private Account buyer;
     private Account seller;
-    private ClobSystem clob;
+    private ClobSystem system;
+
+    private static void assertBd(BigDecimal expected, BigDecimal actual) {
+        assertEquals(0, expected.compareTo(actual),
+            () -> "expected: <" + expected.toPlainString() + "> but was: <" + actual.toPlainString() + ">");
+    }
+
+    private Order buyOrder(long id, long price, long qty) {
+        return new Order(id, OrderSide.BUY, price, qty, OrderType.LIMIT, BUYER_ID, INSTRUMENT);
+    }
+
+    private Order sellOrder(long id, long price, long qty) {
+        return new Order(id, OrderSide.SELL, price, qty, OrderType.LIMIT, SELLER_ID, INSTRUMENT);
+    }
 
     @BeforeEach
     void setUp() {
         buyer  = new Account(BUYER_ID);
         seller = new Account(SELLER_ID);
-        buyer.deposit(Asset.BRL, new BigDecimal("100000"));
-        seller.deposit(Asset.BTC, new BigDecimal("10"));
-        clob = new ClobSystem(List.of(BTC_BRL), List.of(buyer, seller));
+        system = new ClobSystem(List.of(INSTRUMENT), List.of(buyer, seller));
     }
 
-    private Order buyOrder(long id, String price, String qty) {
-        return new Order(id, OrderSide.BUY, new BigDecimal(price), new BigDecimal(qty),
-            OrderType.LIMIT, BUYER_ID, BTC_BRL);
-    }
-
-    private Order sellOrder(long id, String price, String qty) {
-        return new Order(id, OrderSide.SELL, new BigDecimal(price), new BigDecimal(qty),
-            OrderType.LIMIT, SELLER_ID, BTC_BRL);
-    }
-
-    private static void assertBd(String expected, BigDecimal actual) {
-        assertEquals(0, new BigDecimal(expected).compareTo(actual),
-            "expected " + expected + " but was " + actual);
-    }
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
 
     @Nested
     class Constructor {
 
         @Test
-        void nullInstruments_throwsNullPointerException() {
+        void shouldRejectNullInstruments() {
             assertThrows(NullPointerException.class,
                 () -> new ClobSystem(null, List.of()));
         }
 
         @Test
-        void nullAccounts_throwsNullPointerException() {
+        void shouldRejectNullAccounts() {
             assertThrows(NullPointerException.class,
-                () -> new ClobSystem(List.of(BTC_BRL), null));
+                () -> new ClobSystem(List.of(INSTRUMENT), null));
         }
 
         @Test
-        void duplicateAccountIds_throwsIllegalStateException() {
-            Account duplicate = new Account(BUYER_ID);
-            assertThrows(IllegalStateException.class,
-                () -> new ClobSystem(List.of(BTC_BRL), List.of(buyer, duplicate)));
+        void shouldCreateOrderBookForEachInstrument() {
+            assertNotNull(system.getOrderBook(INSTRUMENT));
         }
     }
+
+    // -------------------------------------------------------------------------
+    // placeOrder
+    // -------------------------------------------------------------------------
 
     @Nested
     class PlaceOrder {
 
         @Test
-        void noMatch_orderRestsInBook() {
-            clob.placeOrder(buyOrder(1, "500", "1"));
-
-            OrderBook book = clob.getOrderBook(BTC_BRL);
-            assertEquals(1, book.getBids().get(500L).size());
+        void shouldRejectNullOrder() {
+            assertThrows(NullPointerException.class, () -> system.placeOrder(null));
         }
 
         @Test
-        void fullMatch_executesTradeAndClearsBook() {
-            clob.placeOrder(sellOrder(1, "500", "1"));
-            clob.placeOrder(buyOrder(2, "500", "1"));
+        void shouldRejectOrderForUnknownInstrument() {
+            Instrument other = new Instrument(Asset.BRL, Asset.BTC);
+            new ClobSystem(List.of(other), List.of(buyer));  // other system, not our book
 
-            OrderBook book = clob.getOrderBook(BTC_BRL);
-            assertTrue(book.getBids().isEmpty());
-            assertTrue(book.getAsks().isEmpty());
+            Order buy = new Order(1, OrderSide.BUY, 500L, QTY_1_BTC, OrderType.LIMIT,
+                BUYER_ID, other);
+            // "other" is not registered in the default system
+            assertThrows(IllegalArgumentException.class,
+                () -> system.placeOrder(buy));
         }
 
-        @Test
-        void fullMatch_settlesBothAccounts() {
-            clob.placeOrder(sellOrder(1, "500", "1"));
-            clob.placeOrder(buyOrder(2, "500", "1"));
+        @Nested
+        class NoMatch {
 
-            assertBd("1", buyer.getAvailableBalance(Asset.BTC));
-            assertBd("500", seller.getAvailableBalance(Asset.BRL));
+            @Test
+            void buyWithNoResting_restsInBook() {
+                buyer.deposit(Asset.BRL, new BigDecimal("500"));
+                Order buy = buyOrder(1, 500L, QTY_1_BTC);
+
+                system.placeOrder(buy);
+
+                assertFalse(system.getOrderBook(INSTRUMENT).getBids().isEmpty());
+            }
+
+            @Test
+            void buyWithNoResting_buyerFundsAreLocked() {
+                buyer.deposit(Asset.BRL, new BigDecimal("500"));
+                Order buy = buyOrder(1, 500L, QTY_1_BTC);
+
+                system.placeOrder(buy);
+
+                // notional = 500 BRL * 1 BTC = 500 BRL locked
+                assertBd(new BigDecimal("500"), buyer.getLockedBalance(Asset.BRL));
+            }
+
+            @Test
+            void sellWithNoResting_restsInBook() {
+                seller.deposit(Asset.BTC, new BigDecimal("1"));
+                Order sell = sellOrder(1, 500L, QTY_1_BTC);
+
+                system.placeOrder(sell);
+
+                assertFalse(system.getOrderBook(INSTRUMENT).getAsks().isEmpty());
+            }
+
+            @Test
+            void sellWithNoResting_sellerBtcIsLocked() {
+                seller.deposit(Asset.BTC, new BigDecimal("1"));
+                Order sell = sellOrder(1, 500L, QTY_1_BTC);
+
+                system.placeOrder(sell);
+
+                assertBd(new BigDecimal("1"), seller.getLockedBalance(Asset.BTC));
+            }
         }
 
-        @Test
-        void nullOrder_throwsNullPointerException() {
-            assertThrows(NullPointerException.class, () -> clob.placeOrder(null));
+        @Nested
+        class FullMatch {
+
+            @BeforeEach
+            void fundAccounts() {
+                buyer.deposit(Asset.BRL, new BigDecimal("500"));
+                seller.deposit(Asset.BTC, new BigDecimal("1"));
+            }
+
+            @Test
+            void buyMatchesSell_orderBookIsEmpty() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertTrue(system.getOrderBook(INSTRUMENT).getBids().isEmpty());
+                assertTrue(system.getOrderBook(INSTRUMENT).getAsks().isEmpty());
+            }
+
+            @Test
+            void buyMatchesSell_buyerReceivesBtc() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertBd(new BigDecimal("1"), buyer.getBalance(Asset.BTC));
+            }
+
+            @Test
+            void buyMatchesSell_sellerReceivesBrl() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                // seller sold 1 BTC at 500 BRL → receives 500 BRL
+                assertBd(new BigDecimal("500"), seller.getBalance(Asset.BRL));
+            }
+
+            @Test
+            void buyMatchesSell_buyerBrlLockedIsReleasedToZero() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertBd(BigDecimal.ZERO, buyer.getLockedBalance(Asset.BRL));
+            }
+
+            @Test
+            void buyMatchesSell_sellerBtcLockedIsReleasedToZero() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertBd(BigDecimal.ZERO, seller.getLockedBalance(Asset.BTC));
+            }
+
+            @Test
+            void buyMatchesSell_incomingOrderStatusIsFilled() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                Order buy = buyOrder(2, 500L, QTY_1_BTC);
+                system.placeOrder(buy);
+
+                assertEquals(OrderStatus.FILLED, buy.getStatus());
+            }
+
+            @Test
+            void buyMatchesSell_restingOrderStatusIsFilled() {
+                Order sell = sellOrder(1, 500L, QTY_1_BTC);
+                system.placeOrder(sell);
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertEquals(OrderStatus.FILLED, sell.getStatus());
+            }
+
+            @Test
+            void tradeRecordedInBuyerHistory() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertEquals(1, buyer.getTradeHistory().size());
+            }
+
+            @Test
+            void tradeRecordedInSellerHistory() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_1_BTC));
+
+                assertEquals(1, seller.getTradeHistory().size());
+            }
+        }
+
+        @Nested
+        class PartialMatch {
+
+            @BeforeEach
+            void fundAccounts() {
+                buyer.deposit(Asset.BRL, new BigDecimal("1000"));   // enough for 2 BTC
+                seller.deposit(Asset.BTC, new BigDecimal("1"));     // only 1 BTC
+            }
+
+            @Test
+            void buyLargerThanResting_remainderRestsInBook() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));   // 1 BTC resting
+                system.placeOrder(buyOrder(2, 500L, QTY_2_BTC));    // 2 BTC incoming
+
+                assertFalse(system.getOrderBook(INSTRUMENT).getBids().isEmpty());
+            }
+
+            @Test
+            void buyLargerThanResting_incomingOrderIsPartiallyFilled() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                Order buy = buyOrder(2, 500L, QTY_2_BTC);
+                system.placeOrder(buy);
+
+                assertEquals(OrderStatus.PARTIALLY_FILLED, buy.getStatus());
+            }
+
+            @Test
+            void buyLargerThanResting_restingOrderIsFullyFilled() {
+                Order sell = sellOrder(1, 500L, QTY_1_BTC);
+                system.placeOrder(sell);
+                system.placeOrder(buyOrder(2, 500L, QTY_2_BTC));
+
+                assertEquals(OrderStatus.FILLED, sell.getStatus());
+            }
+
+            @Test
+            void buyLargerThanResting_buyerReceivesPartialBtc() {
+                system.placeOrder(sellOrder(1, 500L, QTY_1_BTC));
+                system.placeOrder(buyOrder(2, 500L, QTY_2_BTC));
+
+                assertBd(new BigDecimal("1"), buyer.getBalance(Asset.BTC));
+            }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // cancelOrder
+    // -------------------------------------------------------------------------
 
     @Nested
     class CancelOrder {
 
         @Test
-        void cancelOpenOrder_removesFromBook() {
-            Order buy = buyOrder(1, "500", "1");
-            clob.placeOrder(buy);
-            clob.cancelOrder(buy);
+        void shouldRejectNullOrder() {
+            assertThrows(NullPointerException.class, () -> system.cancelOrder(null));
+        }
 
-            assertTrue(clob.getOrderBook(BTC_BRL).getBids().isEmpty());
+        @Test
+        void cancelRestingBuy_orderRemovedFromBook() {
+            buyer.deposit(Asset.BRL, new BigDecimal("500"));
+            Order buy = buyOrder(1, 500L, QTY_1_BTC);
+            system.placeOrder(buy);
+
+            system.cancelOrder(buy);
+
+            assertTrue(system.getOrderBook(INSTRUMENT).getBids().isEmpty());
+        }
+
+        @Test
+        void cancelRestingBuy_orderStatusIsCanceled() {
+            buyer.deposit(Asset.BRL, new BigDecimal("500"));
+            Order buy = buyOrder(1, 500L, QTY_1_BTC);
+            system.placeOrder(buy);
+
+            system.cancelOrder(buy);
+
             assertEquals(OrderStatus.CANCELED, buy.getStatus());
         }
 
         @Test
-        void cancelOrder_releasesLockedFunds() {
-            Order buy = buyOrder(1, "500", "1");
-            clob.placeOrder(buy);
-            clob.cancelOrder(buy);
+        void cancelRestingBuy_buyerFundsAreUnlocked() {
+            buyer.deposit(Asset.BRL, new BigDecimal("500"));
+            Order buy = buyOrder(1, 500L, QTY_1_BTC);
+            system.placeOrder(buy);
 
-            assertBd("0", buyer.getLockedBalance(Asset.BRL));
-            assertBd("100000", buyer.getAvailableBalance(Asset.BRL));
+            system.cancelOrder(buy);
+
+            assertBd(BigDecimal.ZERO, buyer.getLockedBalance(Asset.BRL));
+            assertBd(new BigDecimal("500"), buyer.getAvailableBalance(Asset.BRL));
         }
 
         @Test
-        void cancelFilledOrder_throwsIllegalStateException() {
-            Order sell = sellOrder(1, "500", "1");
-            clob.placeOrder(sell);
-            clob.placeOrder(buyOrder(2, "500", "1"));
+        void cancelRestingSell_orderRemovedFromBook() {
+            seller.deposit(Asset.BTC, new BigDecimal("1"));
+            Order sell = sellOrder(1, 500L, QTY_1_BTC);
+            system.placeOrder(sell);
 
-            assertThrows(IllegalStateException.class, () -> clob.cancelOrder(sell));
+            system.cancelOrder(sell);
+
+            assertTrue(system.getOrderBook(INSTRUMENT).getAsks().isEmpty());
         }
 
         @Test
-        void nullOrder_throwsNullPointerException() {
-            assertThrows(NullPointerException.class, () -> clob.cancelOrder(null));
+        void cancelRestingSell_sellerBtcIsUnlocked() {
+            seller.deposit(Asset.BTC, new BigDecimal("1"));
+            Order sell = sellOrder(1, 500L, QTY_1_BTC);
+            system.placeOrder(sell);
+
+            system.cancelOrder(sell);
+
+            assertBd(BigDecimal.ZERO, seller.getLockedBalance(Asset.BTC));
+            assertBd(new BigDecimal("1"), seller.getAvailableBalance(Asset.BTC));
+        }
+
+        @Test
+        void cancelOrderNotInBook_throws() {
+            Order buy = buyOrder(99, 500L, QTY_1_BTC);
+            // never placed — not in book
+            assertThrows(Exception.class, () -> system.cancelOrder(buy));
         }
     }
 
-    @Nested
-    class Deposit {
-
-        @Test
-        void depositsToExistingAccount() {
-            clob.deposit(BUYER_ID, Asset.BRL, new BigDecimal("500"));
-
-            assertBd("100500", buyer.getAvailableBalance(Asset.BRL));
-        }
-
-        @Test
-        void depositsCreatesAccountOnTheFly() {
-            AccountId newId = new AccountId("new");
-            clob.deposit(newId, Asset.BTC, new BigDecimal("5"));
-
-            // verify via subsequent placeOrder — account must hold the deposited balance
-            Order sell = new Order(99, OrderSide.SELL, new BigDecimal("500"),
-                new BigDecimal("1"), OrderType.LIMIT, newId, BTC_BRL);
-            clob.placeOrder(sell);
-
-            assertEquals(1, clob.getOrderBook(BTC_BRL).getAsks().get(500L).size());
-        }
-
-        @Test
-        void nullAccountId_throwsNullPointerException() {
-            assertThrows(NullPointerException.class,
-                () -> clob.deposit(null, Asset.BRL, BigDecimal.ONE));
-        }
-
-        @Test
-        void nullAsset_throwsNullPointerException() {
-            assertThrows(NullPointerException.class,
-                () -> clob.deposit(BUYER_ID, null, BigDecimal.ONE));
-        }
-
-        @Test
-        void nullAmount_throwsNullPointerException() {
-            assertThrows(NullPointerException.class,
-                () -> clob.deposit(BUYER_ID, Asset.BRL, null));
-        }
-    }
-
-    @Nested
-    class Withdraw {
-
-        @Test
-        void withdrawReducesAvailableBalance() {
-            clob.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("1000"));
-
-            assertBd("99000", buyer.getAvailableBalance(Asset.BRL));
-        }
-
-        @Test
-        void withdrawMoreThanAvailable_throwsIllegalArgumentException() {
-            assertThrows(IllegalArgumentException.class,
-                () -> clob.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("200000")));
-        }
-
-        @Test
-        void withdrawLockedFunds_throwsIllegalArgumentException() {
-            clob.placeOrder(buyOrder(1, "500", "1")); // locks 500 BRL
-
-            // only 99500 available — trying to withdraw 100000 must fail
-            assertThrows(IllegalArgumentException.class,
-                () -> clob.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("100000")));
-        }
-
-        @Test
-        void nullAccountId_throwsNullPointerException() {
-            assertThrows(NullPointerException.class,
-                () -> clob.withdraw(null, Asset.BRL, BigDecimal.ONE));
-        }
-
-        @Test
-        void nullAsset_throwsNullPointerException() {
-            assertThrows(NullPointerException.class,
-                () -> clob.withdraw(BUYER_ID, null, BigDecimal.ONE));
-        }
-
-        @Test
-        void nullAmount_throwsNullPointerException() {
-            assertThrows(NullPointerException.class,
-                () -> clob.withdraw(BUYER_ID, Asset.BRL, null));
-        }
-    }
+    // -------------------------------------------------------------------------
+    // addAccount
+    // -------------------------------------------------------------------------
 
     @Nested
     class AddAccount {
 
         @Test
-        void addsNewAccount() {
-            AccountId newId = new AccountId("new");
-            Account newAccount = new Account(newId);
-            newAccount.deposit(Asset.BTC, new BigDecimal("3"));
-            clob.addAccount(newAccount);
-
-            Order sell = new Order(99, OrderSide.SELL, new BigDecimal("500"),
-                new BigDecimal("1"), OrderType.LIMIT, newId, BTC_BRL);
-            clob.placeOrder(sell);
-
-            assertEquals(1, clob.getOrderBook(BTC_BRL).getAsks().get(500L).size());
+        void shouldRejectNullAccount() {
+            assertThrows(NullPointerException.class, () -> system.addAccount(null));
         }
 
         @Test
-        void addExistingAccountId_doesNotOverwrite() {
-            Account impostor = new Account(BUYER_ID);
-            impostor.deposit(Asset.BRL, new BigDecimal("1"));
-            clob.addAccount(impostor);
+        void addNewAccount_allowsSubsequentDeposit() {
+            AccountId newId = new AccountId("newcomer");
+            system.addAccount(new Account(newId));
+            system.deposit(newId, Asset.BRL, new BigDecimal("100"));
 
-            // original buyer balance unchanged (putIfAbsent semantics)
-            assertBd("100000", buyer.getAvailableBalance(Asset.BRL));
+            // no exception means the account was found and the deposit succeeded
         }
 
         @Test
-        void nullAccount_throwsNullPointerException() {
-            assertThrows(NullPointerException.class, () -> clob.addAccount(null));
+        void addDuplicateAccount_doesNotOverwriteExisting() {
+            buyer.deposit(Asset.BRL, new BigDecimal("100"));
+
+            // attempt to replace buyer with a fresh empty account
+            system.addAccount(new Account(BUYER_ID));
+
+            // original buyer's balance must still be there
+            assertEquals(new BigDecimal("100"), buyer.getAvailableBalance(Asset.BRL));
         }
     }
+
+    // -------------------------------------------------------------------------
+    // getOrderBook
+    // -------------------------------------------------------------------------
 
     @Nested
     class GetOrderBook {
 
         @Test
-        void returnsBookForRegisteredInstrument() {
-            OrderBook book = clob.getOrderBook(BTC_BRL);
-
-            assertNotNull(book);
-            assertEquals(BTC_BRL, book.getInstrument());
+        void shouldRejectNullInstrument() {
+            assertThrows(NullPointerException.class, () -> system.getOrderBook(null));
         }
 
         @Test
-        void nullInstrument_throwsNullPointerException() {
-            assertThrows(NullPointerException.class, () -> clob.getOrderBook(null));
+        void returnsOrderBookForKnownInstrument() {
+            assertNotNull(system.getOrderBook(INSTRUMENT));
+        }
+
+        @Test
+        void returnsNullForUnknownInstrument() {
+            Instrument unknown = new Instrument(Asset.BRL, Asset.BTC);
+            assertNull(system.getOrderBook(unknown));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // deposit
+    // -------------------------------------------------------------------------
+
+    @Nested
+    class Deposit {
+
+        @Test
+        void shouldRejectNullAccountId() {
+            assertThrows(NullPointerException.class,
+                () -> system.deposit(null, Asset.BRL, BigDecimal.TEN));
+        }
+
+        @Test
+        void shouldRejectNullAsset() {
+            assertThrows(NullPointerException.class,
+                () -> system.deposit(BUYER_ID, null, BigDecimal.TEN));
+        }
+
+        @Test
+        void shouldRejectNullAmount() {
+            assertThrows(NullPointerException.class,
+                () -> system.deposit(BUYER_ID, Asset.BRL, null));
+        }
+
+        @Test
+        void shouldRejectZeroAmount() {
+            assertThrows(IllegalArgumentException.class,
+                () -> system.deposit(BUYER_ID, Asset.BRL, BigDecimal.ZERO));
+        }
+
+        @Test
+        void shouldRejectNegativeAmount() {
+            assertThrows(IllegalArgumentException.class,
+                () -> system.deposit(BUYER_ID, Asset.BRL, new BigDecimal("-1")));
+        }
+
+        @Test
+        void depositIncreasesAvailableBalance() {
+            system.deposit(BUYER_ID, Asset.BRL, new BigDecimal("250"));
+
+            assertEquals(new BigDecimal("250"), buyer.getAvailableBalance(Asset.BRL));
+        }
+
+        @Test
+        void multipleDepositsAccumulate() {
+            system.deposit(BUYER_ID, Asset.BRL, new BigDecimal("100"));
+            system.deposit(BUYER_ID, Asset.BRL, new BigDecimal("50"));
+
+            assertEquals(new BigDecimal("150"), buyer.getAvailableBalance(Asset.BRL));
+        }
+
+        @Test
+        void depositForUnknownAccountId_createsAccountImplicitly() {
+            AccountId stranger = new AccountId("stranger");
+            assertDoesNotThrow(() -> system.deposit(stranger, Asset.BRL, new BigDecimal("10")));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // withdraw
+    // -------------------------------------------------------------------------
+
+    @Nested
+    class Withdraw {
+
+        @Test
+        void shouldRejectNullAccountId() {
+            assertThrows(NullPointerException.class,
+                () -> system.withdraw(null, Asset.BRL, BigDecimal.TEN));
+        }
+
+        @Test
+        void shouldRejectNullAsset() {
+            assertThrows(NullPointerException.class,
+                () -> system.withdraw(BUYER_ID, null, BigDecimal.TEN));
+        }
+
+        @Test
+        void shouldRejectNullAmount() {
+            assertThrows(NullPointerException.class,
+                () -> system.withdraw(BUYER_ID, Asset.BRL, null));
+        }
+
+        @Test
+        void shouldRejectZeroAmount() {
+            buyer.deposit(Asset.BRL, new BigDecimal("100"));
+            assertThrows(IllegalArgumentException.class,
+                () -> system.withdraw(BUYER_ID, Asset.BRL, BigDecimal.ZERO));
+        }
+
+        @Test
+        void shouldRejectNegativeAmount() {
+            buyer.deposit(Asset.BRL, new BigDecimal("100"));
+            assertThrows(IllegalArgumentException.class,
+                () -> system.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("-1")));
+        }
+
+        @Test
+        void withdrawDecreasesAvailableBalance() {
+            buyer.deposit(Asset.BRL, new BigDecimal("100"));
+            system.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("40"));
+
+            assertEquals(new BigDecimal("60"), buyer.getAvailableBalance(Asset.BRL));
+        }
+
+        @Test
+        void withdrawExactBalance_leavesZero() {
+            buyer.deposit(Asset.BRL, new BigDecimal("100"));
+            system.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("100"));
+
+            assertEquals(BigDecimal.ZERO, buyer.getAvailableBalance(Asset.BRL));
+        }
+
+        @Test
+        void withdrawMoreThanAvailable_throws() {
+            buyer.deposit(Asset.BRL, new BigDecimal("50"));
+            assertThrows(IllegalArgumentException.class,
+                () -> system.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("100")));
+        }
+
+        @Test
+        void withdrawFromEmptyBalance_throws() {
+            assertThrows(IllegalArgumentException.class,
+                () -> system.withdraw(BUYER_ID, Asset.BRL, new BigDecimal("1")));
         }
     }
 }

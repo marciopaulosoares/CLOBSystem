@@ -2,7 +2,6 @@ package com.mb.crypto.clob.domain;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -103,8 +102,8 @@ public final class Order extends OrderTrailPad {
     public Order(
         long orderId,
         OrderSide side,
-        BigDecimal price,
-        BigDecimal quantity,
+        long priceLong,
+        long quantityLong,
         OrderType type,
         AccountId accountId,
         Instrument instrument) {
@@ -113,16 +112,14 @@ public final class Order extends OrderTrailPad {
         this.type       = Objects.requireNonNull(type,       "Type cannot be null");
         this.accountId  = Objects.requireNonNull(accountId,  "AccountId cannot be null");
         this.instrument = Objects.requireNonNull(instrument, "Instrument cannot be null");
-        Objects.requireNonNull(price,    "Price cannot be null");
-        Objects.requireNonNull(quantity, "Quantity cannot be null");
-        if (price.compareTo(BigDecimal.ZERO) <= 0) {
+        if (priceLong <= 0) {
             throw new IllegalArgumentException("Price must be positive");
         }
-        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+        if (quantityLong <= 0) {
             throw new IllegalArgumentException("Quantity must be positive");
         }
-        this.priceLong       = price.movePointRight(Scales.PRICE_DECIMALS).longValueExact();
-        this.quantityLong    = quantity.movePointRight(Scales.QUANTITY_DECIMALS).longValueExact();
+        this.priceLong       = priceLong;
+        this.quantityLong    = quantityLong;
         this.createdAtMillis = System.currentTimeMillis();
         this.updatedAtMillis = this.createdAtMillis;
         this.statusOrdinal   = OrderStatus.OPEN.ordinal();
@@ -136,29 +133,10 @@ public final class Order extends OrderTrailPad {
         return side;
     }
 
-    /** Returns the limit price as integer BRL (lossless conversion from {@link #getPriceLong()}). */
-    public BigDecimal getPrice() {
-        return BigDecimal.valueOf(priceLong, Scales.PRICE_DECIMALS);
-    }
-
-    /** Returns the limit price as a scaled long (integer BRL when PRICE_DECIMALS = 0). */
     public long getPriceLong() {
         return priceLong;
     }
 
-    /**
-     * Returns the remaining quantity as a normalized BigDecimal (trailing zeros stripped).
-     * Returns {@link BigDecimal#ZERO} when the order is fully filled.
-     */
-    public BigDecimal getQuantity() {
-        long q = quantityLong;
-        if (q == 0L) {
-            return BigDecimal.ZERO;
-        }
-        return new BigDecimal(q).movePointLeft(Scales.QUANTITY_DECIMALS).stripTrailingZeros();
-    }
-
-    /** Returns the remaining quantity in satoshis. */
     public long getQuantityLong() {
         return quantityLong;
     }
@@ -203,14 +181,8 @@ public final class Order extends OrderTrailPad {
         }
     }
 
-    /** Decreases remaining quantity by {@code delta} satoshis. */
     public void decreaseQuantity(long delta) {
         updateQuantityLong(quantityLong - delta);
-    }
-
-    /** Decreases remaining quantity by the given BigDecimal amount (converted to satoshis). */
-    public void decreaseQuantity(BigDecimal amount) {
-        decreaseQuantity(amount.movePointRight(Scales.QUANTITY_DECIMALS).longValueExact());
     }
 
     boolean updateStatus(OrderStatus expected, OrderStatus newStatus) {

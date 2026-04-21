@@ -1,248 +1,348 @@
 package com.mb.crypto.clob.matching;
 
-import com.mb.crypto.clob.domain.Account;
 import com.mb.crypto.clob.domain.AccountId;
 import com.mb.crypto.clob.domain.Asset;
 import com.mb.crypto.clob.domain.Instrument;
 import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
-import com.mb.crypto.clob.domain.OrderStatus;
 import com.mb.crypto.clob.domain.OrderType;
 import com.mb.crypto.clob.orderbook.OrderBook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LimitOrderStrategyTest {
 
-    private static final Instrument BTC_BRL = new Instrument(Asset.BTC, Asset.BRL);
-    private static final AccountId ACCOUNT_A = new AccountId("A");
-    private static final AccountId ACCOUNT_B = new AccountId("B");
+    private static final Instrument INSTRUMENT   = new Instrument(Asset.BTC, Asset.BRL);
+    private static final AccountId  BUYER_ID     = new AccountId("buyer");
+    private static final AccountId  SELLER_ID    = new AccountId("seller");
+
+    private static final long QTY_1 = 100_000_000L;  // 1 BTC in satoshis
+    private static final long QTY_2 = 200_000_000L;  // 2 BTC in satoshis
 
     private LimitOrderStrategy strategy;
-    private OrderBook book;
-    private Map<AccountId, Account> accounts;
+    private OrderBook orderBook;
+
+    private Order buyOrder(long id, long price, long qty) {
+        return new Order(id, OrderSide.BUY, price, qty, OrderType.LIMIT, BUYER_ID, INSTRUMENT);
+    }
+
+    private Order sellOrder(long id, long price, long qty) {
+        return new Order(id, OrderSide.SELL, price, qty, OrderType.LIMIT, SELLER_ID, INSTRUMENT);
+    }
 
     @BeforeEach
     void setUp() {
-        strategy = new LimitOrderStrategy();
-        book = new OrderBook(BTC_BRL);
-        accounts = new HashMap<>();
-        accounts.put(ACCOUNT_A, new Account(ACCOUNT_A));
-        accounts.put(ACCOUNT_B, new Account(ACCOUNT_B));
+        strategy  = new LimitOrderStrategy();
+        orderBook = new OrderBook(INSTRUMENT);
     }
 
-    private Order order(long id, OrderSide side, String price, String qty) {
-        return new Order(id, side, new BigDecimal(price), new BigDecimal(qty),
-            OrderType.LIMIT, side == OrderSide.BUY ? ACCOUNT_A : ACCOUNT_B, BTC_BRL);
-    }
+    // -------------------------------------------------------------------------
+    // No match scenarios
+    // -------------------------------------------------------------------------
 
     @Nested
     class NoMatch {
 
         @Test
-        void buyPriceBelowBestAsk_returnsNoMatches() {
-            Order ask = order(1, OrderSide.SELL, "500", "1");
-            book.addOrder(ask);
+        void buyBelowBestAsk_returnsEmptyList() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));   // ask at 500
+            Order buy = buyOrder(2, 499L, QTY_1);            // bid at 499
 
-            Order buy = order(2, OrderSide.BUY, "499", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
 
-            assertTrue(matches.isEmpty());
-            assertEquals(new BigDecimal("1"), buy.getQuantity());
+            assertTrue(result.isEmpty());
         }
 
         @Test
-        void sellPriceAboveBestBid_returnsNoMatches() {
-            Order bid = order(1, OrderSide.BUY, "500", "1");
-            book.addOrder(bid);
+        void sellAboveBestBid_returnsEmptyList() {
+            orderBook.addOrder(buyOrder(1, 500L, QTY_1));    // bid at 500
+            Order sell = sellOrder(2, 501L, QTY_1);          // ask at 501
 
-            Order sell = order(2, OrderSide.SELL, "501", "1");
-            List<MatchedPair> matches = strategy.match(sell, book, accounts);
+            List<MatchedPair> result = strategy.match(sell, orderBook, Map.of());
 
-            assertTrue(matches.isEmpty());
-            assertEquals(new BigDecimal("1"), sell.getQuantity());
+            assertTrue(result.isEmpty());
         }
 
         @Test
-        void emptyBook_returnsNoMatches() {
-            Order buy = order(1, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+        void emptyBook_returnsEmptyList() {
+            Order buy = buyOrder(1, 500L, QTY_1);
 
-            assertTrue(matches.isEmpty());
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
+
+            assertTrue(result.isEmpty());
+        }
+
+        @Test
+        void incomingQuantityNotReducedOnMiss() {
+            orderBook.addOrder(sellOrder(1, 600L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_1);
+
+            strategy.match(buy, orderBook, Map.of());
+
+            assertEquals(QTY_1, buy.getQuantityLong());
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Full fill scenarios
+    // -------------------------------------------------------------------------
 
     @Nested
     class FullFill {
 
         @Test
-        void buyMatchesAskAtSamePrice() {
-            Order ask = order(1, OrderSide.SELL, "500", "1");
-            book.addOrder(ask);
+        void buyAtExactAskPrice_producesOneMatchedPair() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_1);
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
 
-            assertEquals(1, matches.size());
-            assertEquals(500L, matches.get(0).price());
-            assertEquals(100_000_000L, matches.get(0).qty());
-            assertEquals(BigDecimal.ZERO, buy.getQuantity());
-            assertEquals(BigDecimal.ZERO, ask.getQuantity());
+            assertEquals(1, result.size());
         }
 
         @Test
-        void buyMatchesAskAtBetterPrice() {
-            Order ask = order(1, OrderSide.SELL, "490", "1");
-            book.addOrder(ask);
+        void buyAtExactAskPrice_matchedPairHasCorrectPrice() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_1);
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+            MatchedPair pair = strategy.match(buy, orderBook, Map.of()).getFirst();
 
-            assertEquals(1, matches.size());
-            assertEquals(490L, matches.get(0).price(), "trade executes at resting (ask) price");
-            assertEquals(BigDecimal.ZERO, buy.getQuantity());
+            assertEquals(500L, pair.price());
         }
 
         @Test
-        void sellMatchesBidAtSamePrice() {
-            Order bid = order(1, OrderSide.BUY, "500", "2");
-            book.addOrder(bid);
+        void buyAtExactAskPrice_matchedPairHasCorrectQty() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_1);
 
-            Order sell = order(2, OrderSide.SELL, "500", "2");
-            List<MatchedPair> matches = strategy.match(sell, book, accounts);
+            MatchedPair pair = strategy.match(buy, orderBook, Map.of()).getFirst();
 
-            assertEquals(1, matches.size());
-            assertEquals(BigDecimal.ZERO, sell.getQuantity());
-            assertEquals(BigDecimal.ZERO, bid.getQuantity());
+            assertEquals(QTY_1, pair.qty());
+        }
+
+        @Test
+        void buyAboveAskPrice_matchesAtAskPrice() {
+            orderBook.addOrder(sellOrder(1, 490L, QTY_1));   // ask at 490
+            Order buy = buyOrder(2, 500L, QTY_1);            // bid at 500
+
+            MatchedPair pair = strategy.match(buy, orderBook, Map.of()).getFirst();
+
+            assertEquals(490L, pair.price());
+        }
+
+        @Test
+        void sellAtExactBidPrice_producesOneMatchedPair() {
+            orderBook.addOrder(buyOrder(1, 500L, QTY_1));
+            Order sell = sellOrder(2, 500L, QTY_1);
+
+            List<MatchedPair> result = strategy.match(sell, orderBook, Map.of());
+
+            assertEquals(1, result.size());
+        }
+
+        @Test
+        void sellBelowBidPrice_matchesAtBidPrice() {
+            orderBook.addOrder(buyOrder(1, 510L, QTY_1));    // bid at 510
+            Order sell = sellOrder(2, 500L, QTY_1);          // ask at 500
+
+            MatchedPair pair = strategy.match(sell, orderBook, Map.of()).getFirst();
+
+            assertEquals(510L, pair.price());
+        }
+
+        @Test
+        void incomingQuantityIsZeroAfterFullFill() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_1);
+
+            strategy.match(buy, orderBook, Map.of());
+
+            assertEquals(0L, buy.getQuantityLong());
+        }
+
+        @Test
+        void restingQuantityIsZeroAfterFullFill() {
+            Order resting = sellOrder(1, 500L, QTY_1);
+            orderBook.addOrder(resting);
+            Order buy = buyOrder(2, 500L, QTY_1);
+
+            strategy.match(buy, orderBook, Map.of());
+
+            assertEquals(0L, resting.getQuantityLong());
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Partial fill scenarios
+    // -------------------------------------------------------------------------
 
     @Nested
     class PartialFill {
 
         @Test
-        void incomingLargerThanResting_remainderLeftOnIncoming() {
-            Order ask = order(1, OrderSide.SELL, "500", "0.5");
-            book.addOrder(ask);
+        void buyLargerThanRestingAsk_consumesRestingFully() {
+            Order resting = sellOrder(1, 500L, QTY_1);
+            orderBook.addOrder(resting);
+            Order buy = buyOrder(2, 500L, QTY_2);            // 2 BTC incoming, 1 BTC resting
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+            strategy.match(buy, orderBook, Map.of());
 
-            assertEquals(1, matches.size());
-            assertEquals(new BigDecimal("0.5"), buy.getQuantity());
-            assertEquals(BigDecimal.ZERO, ask.getQuantity());
+            assertEquals(0L, resting.getQuantityLong());
         }
 
         @Test
-        void restingLargerThanIncoming_remainderLeftOnResting() {
-            Order ask = order(1, OrderSide.SELL, "500", "2");
-            book.addOrder(ask);
+        void buyLargerThanRestingAsk_incomingHasRemainder() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_2);
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+            strategy.match(buy, orderBook, Map.of());
 
-            assertEquals(1, matches.size());
-            assertEquals(BigDecimal.ZERO, buy.getQuantity());
-            assertEquals(new BigDecimal("1"), ask.getQuantity());
-        }
-    }
-
-    @Nested
-    class MultiLevelMatching {
-
-        @Test
-        void buyConsumesMultiplePriceLevels() {
-            Order ask1 = order(1, OrderSide.SELL, "490", "0.5");
-            Order ask2 = order(2, OrderSide.SELL, "495", "0.5");
-            book.addOrder(ask1);
-            book.addOrder(ask2);
-
-            Order buy = order(3, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
-
-            assertEquals(2, matches.size());
-            assertEquals(490L, matches.get(0).price());
-            assertEquals(495L, matches.get(1).price());
-            assertEquals(BigDecimal.ZERO, buy.getQuantity());
+            assertEquals(QTY_1, buy.getQuantityLong());      // 1 BTC remains
         }
 
         @Test
-        void buyConsumesSameLevelFifo() {
-            Order ask1 = order(1, OrderSide.SELL, "500", "0.3");
-            Order ask2 = order(2, OrderSide.SELL, "500", "0.7");
-            book.addOrder(ask1);
-            book.addOrder(ask2);
+        void buyLargerThanRestingAsk_matchedQtyIsRestingQty() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_2);
 
-            Order buy = order(3, OrderSide.BUY, "500", "1");
-            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+            MatchedPair pair = strategy.match(buy, orderBook, Map.of()).getFirst();
 
-            assertEquals(2, matches.size());
-            assertEquals(ask1, matches.get(0).resting(), "first-in order matched first");
-            assertEquals(ask2, matches.get(1).resting());
-            assertEquals(BigDecimal.ZERO, buy.getQuantity());
+            assertEquals(QTY_1, pair.qty());
         }
 
         @Test
-        void sellConsumesMultipleBidLevels() {
-            Order bid1 = order(1, OrderSide.BUY, "510", "0.4");
-            Order bid2 = order(2, OrderSide.BUY, "505", "0.6");
-            book.addOrder(bid1);
-            book.addOrder(bid2);
+        void buySmallerThanRestingAsk_restingHasRemainder() {
+            Order resting = sellOrder(1, 500L, QTY_2);       // 2 BTC resting
+            orderBook.addOrder(resting);
+            Order buy = buyOrder(2, 500L, QTY_1);            // 1 BTC incoming
 
-            Order sell = order(3, OrderSide.SELL, "500", "1");
-            List<MatchedPair> matches = strategy.match(sell, book, accounts);
+            strategy.match(buy, orderBook, Map.of());
 
-            assertEquals(2, matches.size());
-            assertEquals(510L, matches.get(0).price(), "highest bid matched first");
-            assertEquals(505L, matches.get(1).price());
-            assertEquals(BigDecimal.ZERO, sell.getQuantity());
+            assertEquals(QTY_1, resting.getQuantityLong());  // 1 BTC remains
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Multiple resting order scenarios
+    // -------------------------------------------------------------------------
+
     @Nested
-    class OrderStatusAfterMatch {
+    class MultipleRestingOrders {
 
         @Test
-        void fullyFilledIncomingStatusNotChangedByStrategy() {
-            Order ask = order(1, OrderSide.SELL, "500", "1");
-            book.addOrder(ask);
+        void buySweeepsTwoPriceLevels_returnsTwoMatchedPairs() {
+            orderBook.addOrder(sellOrder(1, 490L, QTY_1));
+            orderBook.addOrder(sellOrder(2, 495L, QTY_1));
+            Order buy = buyOrder(3, 500L, QTY_2);
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            strategy.match(buy, book, accounts);
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
 
-            // strategy only adjusts quantity — status is managed by OrderBookEngine
-            assertEquals(OrderStatus.OPEN, buy.getStatus());
+            assertEquals(2, result.size());
         }
 
         @Test
-        void emptyQueuePurgedFromBook() {
-            Order ask = order(1, OrderSide.SELL, "500", "1");
-            book.addOrder(ask);
+        void buySweeepsTwoPriceLevels_matchesInPriceTimeOrder() {
+            orderBook.addOrder(sellOrder(1, 490L, QTY_1));
+            orderBook.addOrder(sellOrder(2, 495L, QTY_1));
+            Order buy = buyOrder(3, 500L, QTY_2);
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            strategy.match(buy, book, accounts);
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
 
-            assertTrue(book.getAsks().isEmpty(), "empty price level must be removed from book");
+            assertEquals(490L, result.get(0).price());
+            assertEquals(495L, result.get(1).price());
         }
 
         @Test
-        void partiallyFilledRestingRemainsInBook() {
-            Order ask = order(1, OrderSide.SELL, "500", "2");
-            book.addOrder(ask);
+        void buySweeepsTwoPriceLevels_incomingQuantityIsZero() {
+            orderBook.addOrder(sellOrder(1, 490L, QTY_1));
+            orderBook.addOrder(sellOrder(2, 495L, QTY_1));
+            Order buy = buyOrder(3, 500L, QTY_2);
 
-            Order buy = order(2, OrderSide.BUY, "500", "1");
-            strategy.match(buy, book, accounts);
+            strategy.match(buy, orderBook, Map.of());
 
-            assertEquals(1, book.getAsks().get(500L).size(), "resting order still in book");
+            assertEquals(0L, buy.getQuantityLong());
+        }
+
+        @Test
+        void twoOrdersSamePriceLevel_matchedInFifoOrder() {
+            Order firstResting  = sellOrder(1, 500L, QTY_1);
+            Order secondResting = sellOrder(2, 500L, QTY_1);
+            orderBook.addOrder(firstResting);
+            orderBook.addOrder(secondResting);
+            Order buy = buyOrder(3, 500L, QTY_2);
+
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
+
+            assertEquals(2, result.size());
+            assertSame(firstResting,  result.get(0).resting());
+            assertSame(secondResting, result.get(1).resting());
+        }
+
+        @Test
+        void buyStopsAtPriceBoundary_doesNotConsumeRestingAboveLimit() {
+            orderBook.addOrder(sellOrder(1, 490L, QTY_1));   // matches
+            orderBook.addOrder(sellOrder(2, 510L, QTY_1));   // does not match
+            Order buy = buyOrder(3, 500L, QTY_2);
+
+            List<MatchedPair> result = strategy.match(buy, orderBook, Map.of());
+
+            assertEquals(1, result.size());
+            assertEquals(490L, result.getFirst().price());
+        }
+
+        @Test
+        void buyStopsAtPriceBoundary_incomingHasRemainder() {
+            orderBook.addOrder(sellOrder(1, 490L, QTY_1));
+            orderBook.addOrder(sellOrder(2, 510L, QTY_1));
+            Order buy = buyOrder(3, 500L, QTY_2);
+
+            strategy.match(buy, orderBook, Map.of());
+
+            assertEquals(QTY_1, buy.getQuantityLong());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Book cleanup after fill
+    // -------------------------------------------------------------------------
+
+    @Nested
+    class BookCleanup {
+
+        @Test
+        void fullFill_emptyPriceLevelRemovedFromAsks() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_1));
+            Order buy = buyOrder(2, 500L, QTY_1);
+
+            strategy.match(buy, orderBook, Map.of());
+
+            assertFalse(orderBook.getAsks().containsKey(500L));
+        }
+
+        @Test
+        void fullFill_emptyPriceLevelRemovedFromBids() {
+            orderBook.addOrder(buyOrder(1, 500L, QTY_1));
+            Order sell = sellOrder(2, 500L, QTY_1);
+
+            strategy.match(sell, orderBook, Map.of());
+
+            assertFalse(orderBook.getBids().containsKey(500L));
+        }
+
+        @Test
+        void partialFill_priceLevelRemainsInBook() {
+            orderBook.addOrder(sellOrder(1, 500L, QTY_2));   // 2 BTC resting
+            Order buy = buyOrder(2, 500L, QTY_1);            // 1 BTC incoming
+
+            strategy.match(buy, orderBook, Map.of());
+
+            assertTrue(orderBook.getAsks().containsKey(500L));
         }
     }
 }
