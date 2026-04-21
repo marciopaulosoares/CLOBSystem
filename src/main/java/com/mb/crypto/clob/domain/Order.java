@@ -140,7 +140,6 @@ public final class Order {
 
         boolean updated = QUANTITY.compareAndSet(this, quantity, newQuantity);
         if (updated) {
-            QUANTITY.setVolatile(this, newQuantity);
             UPDATED_AT.setVolatile(this, Instant.now());
         }
     }
