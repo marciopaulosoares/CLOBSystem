@@ -3,11 +3,12 @@ package com.mb.crypto.clob.orderbook;
 import com.mb.crypto.clob.domain.Instrument;
 import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
-import com.mb.crypto.clob.domain.OrderStatus;
 
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -25,8 +26,18 @@ import java.util.TreeMap;
 public final class OrderBook {
 
     private final Instrument instrument;
+
     private final NavigableMap<Long, ArrayDeque<Order>> bids;
     private final NavigableMap<Long, ArrayDeque<Order>> asks;
+    private final Map<Long, Order> ordersById = new HashMap<>();
+
+    private final Map<Long, ArrayDeque<Order>> queueByOrderId = new HashMap<>();
+
+    public OrderBook(Instrument instrument) {
+        this.instrument = Objects.requireNonNull(instrument);
+        this.bids = new TreeMap<>(Comparator.reverseOrder());
+        this.asks = new TreeMap<>();
+    }
 
     public Instrument getInstrument() {
         return instrument;
@@ -40,43 +51,63 @@ public final class OrderBook {
         return Collections.unmodifiableNavigableMap(asks);
     }
 
-    public OrderBook(Instrument instrument) {
-        this.instrument = Objects.requireNonNull(instrument, "Instrument cannot be null");
-        this.bids = new TreeMap<>(Comparator.reverseOrder());
-        this.asks = new TreeMap<>();
-    }
-
     public void addOrder(Order order) {
+        Objects.requireNonNull(order);
+
         NavigableMap<Long, ArrayDeque<Order>> side =
             order.getSide() == OrderSide.BUY ? bids : asks;
-        side.computeIfAbsent(order.getPriceLong(), k -> new ArrayDeque<>()).add(order);
+
+        long price = order.getPriceLong();
+
+        ArrayDeque<Order> queue = side.get(price);
+        if (queue == null) {
+            queue = new ArrayDeque<>();
+            side.put(price, queue);
+        }
+
+        queue.add(order);
+
+        ordersById.put(order.getOrderId(), order);
+        queueByOrderId.put(order.getOrderId(), queue);
+    }
+
+    public void cancelOrder(Order order) {
+        Objects.requireNonNull(order);
+
+        Order stored = ordersById.remove(order.getOrderId());
+        ArrayDeque<Order> queue = queueByOrderId.remove(order.getOrderId());
+
+        if (stored == null || queue == null) {
+            throw new IllegalArgumentException(
+                "Order not found: " + order.getOrderId());
+        }
+
+        // still O(n), but only within one price level (small)
+        boolean removed = queue.remove(stored);
+
+        if (!removed) {
+            throw new IllegalStateException(
+                "Order not found in its queue: " + order.getOrderId());
+        }
+
+        if (queue.isEmpty()) {
+            long price = stored.getPriceLong();
+            NavigableMap<Long, ArrayDeque<Order>> side =
+                stored.getSide() == OrderSide.BUY ? bids : asks;
+
+            side.remove(price);
+        }
+
+        stored.cancel();
     }
 
     public void purgeEmptyLevel(long price, OrderSide side) {
-        NavigableMap<Long, ArrayDeque<Order>> map = side == OrderSide.BUY ? bids : asks;
+        NavigableMap<Long, ArrayDeque<Order>> map =
+            side == OrderSide.BUY ? bids : asks;
+
         ArrayDeque<Order> queue = map.get(price);
         if (queue != null && queue.isEmpty()) {
             map.remove(price);
         }
-    }
-
-    public void cancelOrder(Order order) {
-        Objects.requireNonNull(order, "Order cannot be null");
-        OrderStatus status = order.getStatus();
-        if (status != OrderStatus.OPEN && status != OrderStatus.PARTIALLY_FILLED) {
-            throw new IllegalStateException(
-                "Order " + order.getOrderId() + " is not active: " + status);
-        }
-        NavigableMap<Long, ArrayDeque<Order>> side =
-            order.getSide() == OrderSide.BUY ? bids : asks;
-        ArrayDeque<Order> queue = side.get(order.getPriceLong());
-        if (queue == null || !queue.remove(order)) {
-            throw new IllegalArgumentException(
-                "Order not found in book: " + order.getOrderId());
-        }
-        if (queue.isEmpty()) {
-            side.remove(order.getPriceLong());
-        }
-        order.cancel();
     }
 }
