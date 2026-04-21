@@ -33,11 +33,10 @@ class OrderBookEngineTest {
         accounts.put(SELLER_ID, seller);
         engine = new OrderBookEngine(List.of(BTC_BRL), accounts);
 
-        // fund both accounts so placeOrder lock (price × qty BTC) does not throw
-        buyer.deposit(Asset.BTC,  new BigDecimal("10000000"));
-        seller.deposit(Asset.BTC, new BigDecimal("10000000"));
-        // buyer settle debits BRL; deposit ensures the balance entry exists in the map
-        buyer.deposit(Asset.BRL,  new BigDecimal("10000000"));
+        // BUY orders lock QUOTE (BRL) = price × qty; SELL orders lock BASE (BTC) = qty
+        buyer.deposit(Asset.BRL,  new BigDecimal("10000000")); // covers BUY order locks
+        seller.deposit(Asset.BTC, new BigDecimal("10000000")); // covers SELL order locks
+        buyer.deposit(Asset.BTC,  new BigDecimal("10000000")); // covers BTC credited on settlement
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

@@ -61,12 +61,13 @@ public final class OrderBookEngine implements MatchingEngine {
         StampedLock lock = lockRegistry.getLock(order.getInstrument());
         long stamp = lock.writeLock();
         try {
-            var amountToLock = order.getPrice()
-                .multiply(order.getQuantity());
-
             Account account = accounts.get(order.getAccountId());
-            account.lock(order.getInstrument()
-                .base(), amountToLock);
+            if (order.getSide() == OrderSide.BUY) {
+                account.lock(order.getInstrument().quote(),
+                    order.getPrice().multiply(order.getQuantity()));
+            } else {
+                account.lock(order.getInstrument().base(), order.getQuantity());
+            }
 
             OrderBook book = orderBooksByInstrument.get(order.getInstrument());
             if (book == null) {

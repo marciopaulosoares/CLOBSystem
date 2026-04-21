@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests for ClobSystem covering realistic trading scenarios.
  *
- * <p>The engine locks (price × qty) of BASE asset for every order, so both participants
- * are pre-funded with a large BTC and BRL balance in setUp. Tests that assert specific
- * balance changes capture a before-snapshot and verify the delta.
+ * <p>BUY orders lock QUOTE (BRL) = price × qty; SELL orders lock BASE (BTC) = qty.
+ * Both participants are pre-funded with large BTC and BRL balances in setUp.
+ * Tests that assert specific balance changes capture a before-snapshot and verify the delta.
  */
 class ClobSystemTest {
 
@@ -158,13 +158,13 @@ class ClobSystemTest {
             }
 
             @Test
-            void shouldLockBaseAssetOnPlacedOrder() {
-                // engine locks price × qty of BASE for every order
-                BigDecimal btcBefore = alice.getAvailableBalance(Asset.BTC);
+            void shouldLockQuoteAssetOnBuyOrder() {
+                // BUY order locks QUOTE (BRL) = price × qty
+                BigDecimal brlBefore = alice.getAvailableBalance(Asset.BRL);
                 BigDecimal expectedLock = new BigDecimal("300000"); // 300000 × 1
                 system.placeOrder(aliceBuy(1, "300000", "1"));
-                assertEquals(expectedLock, alice.getLockedBalance(Asset.BTC));
-                assertEquals(btcBefore.subtract(expectedLock), alice.getAvailableBalance(Asset.BTC));
+                assertEquals(expectedLock, alice.getLockedBalance(Asset.BRL));
+                assertEquals(brlBefore.subtract(expectedLock), alice.getAvailableBalance(Asset.BRL));
             }
 
             @Test
@@ -232,14 +232,8 @@ class ClobSystemTest {
                 BigDecimal aliceBtcBefore = alice.getAvailableBalance(Asset.BTC);
                 system.placeOrder(bobSell(10, "300000", "1"));
                 system.placeOrder(aliceBuy(1, "300000", "1"));
-                // buyer receives qty in BTC; locked BTC is NOT released in current impl,
-                // so net available = before - locked + credited
-                BigDecimal locked  = new BigDecimal("300000"); // price × qty locked on placeOrder
-                BigDecimal received = BigDecimal.ONE;           // 1 BTC credited on settle
-                assertEquals(
-                    aliceBtcBefore.subtract(locked).add(received),
-                    alice.getAvailableBalance(Asset.BTC)
-                );
+                // BUY order locks BRL (not BTC), so alice's BTC is only affected by the credit
+                assertEquals(aliceBtcBefore.add(BigDecimal.ONE), alice.getAvailableBalance(Asset.BTC));
             }
         }
 
