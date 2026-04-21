@@ -71,25 +71,6 @@ Tests run with ZGC (`-XX:+UseZGC`) to simulate low-pause production conditions.
 
 ---
 
-## Load Test Module
-
-Located in `clob-load-test/` — simulates concurrent order flow against the CLOB system.
-
-**Metrics collected:** throughput (orders/sec), average latency, P95, P99.
-
-```bash
-# From project root
-./build-and-run.sh
-
-# Or from clob-load-test/
-./run.sh
-```
-
-Configure via `.env` (copy from `env-example.txt`). Key parameters: `THREAD_COUNT`, `ORDERS_PER_SECOND`, `TEST_DURATION_SECONDS`.
-
-See `clob-load-test/README.md` for full configuration reference.
-
----
 
 ## AI-Assisted Development
 
