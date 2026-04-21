@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36">
   <diagram name="Page-1" id="jUDWBJNCKWZ-dhEtG4r-">
-    <mxGraphModel dx="1010" dy="658" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1178" dy="758" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -97,7 +97,7 @@
         <mxCell id="uAB5VOuJRQ75fVNj0nVV-1" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="OrderBook" vertex="1">
           <mxGeometry height="40" width="470" x="140" as="geometry" />
         </mxCell>
-        <mxCell id="uAB5VOuJRQ75fVNj0nVV-2" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;" value="&lt;span class=&quot;ͼe&quot;&gt;- Instrument Instrument&lt;br&gt;-&amp;nbsp;NavigableMap&amp;lt;BigDecimal, ArrayDeque&amp;lt;Order&amp;gt;&amp;gt; bids  {DESC - highest bid first}&lt;br&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;-&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;NavigableMap&amp;lt;BigDecimal, ArrayDeque&amp;lt;Order&amp;gt;&amp;gt; asks  {ASC - lowest ask first}&lt;/div&gt;" vertex="1">
+        <mxCell id="uAB5VOuJRQ75fVNj0nVV-2" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;" value="&lt;span class=&quot;ͼe&quot;&gt;- Instrument Instrument&lt;br&gt;-&amp;nbsp;NavigableMap&amp;lt;Long, ArrayDeque&amp;lt;Order&amp;gt;&amp;gt; bids  {DESC - highest bid first}&lt;br&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;-&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;NavigableMap&amp;lt;Long, ArrayDeque&amp;lt;Order&amp;gt;&amp;gt; asks  {ASC - lowest ask first}&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="470" x="140" y="40" as="geometry" />
         </mxCell>
         <mxCell id="4VDRiSkJ3WJV6gG0pTmI-1" parent="2KBLZV84yL6wbkATZP5W-15" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;verticalAlign=top;" value="+ void addOrder(Order order)&lt;br&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;void cancelOrder(Order order)&lt;/div&gt;&lt;div&gt;-&amp;nbsp; void validateOrder(Order order)&lt;/div&gt;" vertex="1">
@@ -186,9 +186,6 @@
         <mxCell id="2KBLZV84yL6wbkATZP5W-37" edge="1" parent="1" source="2KBLZV84yL6wbkATZP5W-32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.501;entryY=1.071;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;strokeColor=default;strokeWidth=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=open;endFill=0;" target="UzTcX7bS2XZKsBFuMxgP-26">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="2KBLZV84yL6wbkATZP5W-40" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="C" vertex="1">
-          <mxGeometry height="15" width="15" x="490" y="380.5" as="geometry" />
-        </mxCell>
         <mxCell id="2KBLZV84yL6wbkATZP5W-46" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="C" vertex="1">
           <mxGeometry height="15" width="15" x="850" y="432.5" as="geometry" />
         </mxCell>
@@ -216,14 +213,14 @@
         <mxCell id="WbD1X7h41OhN-fdEz3TX-7" connectable="0" parent="1" style="group" value="" vertex="1">
           <mxGeometry height="210.75" width="540" x="1320" y="410" as="geometry" />
         </mxCell>
-        <mxCell id="4VDRiSkJ3WJV6gG0pTmI-23" parent="WbD1X7h41OhN-fdEz3TX-7" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=middle;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;- Map&amp;lt;Instrument, OrderBook&amp;gt;&amp;nbsp;orderBooksByInstrument&amp;nbsp;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;- Map&amp;lt;AccountId, Account&amp;gt; accounts&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;div&gt;- InstrumentLockRegistry lockRegistry;&lt;/div&gt;&lt;/div&gt;&lt;div&gt;- Map&amp;lt;OrderType, OrderMatcher&amp;gt; matchers&lt;/div&gt;" vertex="1">
-          <mxGeometry height="80.5" width="540" y="40" as="geometry" />
+        <mxCell id="4VDRiSkJ3WJV6gG0pTmI-23" parent="WbD1X7h41OhN-fdEz3TX-7" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=middle;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;- Map&amp;lt;Instrument, OrderBook&amp;gt;&amp;nbsp;orderBooksByInstrument&amp;nbsp;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;- Map&amp;lt;AccountId, Account&amp;gt; accounts&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;div&gt;- InstrumentLockRegistry lockRegistry;&lt;/div&gt;&lt;/div&gt;&lt;div&gt;- OrderMatcher[] matchers&lt;/div&gt;&lt;div&gt;-&amp;nbsp;&amp;nbsp;AtomicLong tradeIdSequence&lt;/div&gt;" vertex="1">
+          <mxGeometry height="90" width="540" y="40" as="geometry" />
         </mxCell>
         <mxCell id="UzTcX7bS2XZKsBFuMxgP-18" parent="WbD1X7h41OhN-fdEz3TX-7" style="rounded=0;whiteSpace=wrap;html=1;fontStyle=1" value="OrderBookEngine" vertex="1">
           <mxGeometry height="40" width="540" as="geometry" />
         </mxCell>
         <mxCell id="UzTcX7bS2XZKsBFuMxgP-19" parent="WbD1X7h41OhN-fdEz3TX-7" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=default;align=left;verticalAlign=top;spacingLeft=10;fontFamily=Helvetica;fontSize=12;fontColor=default;fillColor=default;" value="&lt;div&gt;+ void PlaceOrder(Order order)&lt;br&gt;+&amp;nbsp;void&amp;nbsp;CancelOrder(orderId, Instrument instrument&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp;&lt;/span&gt;OrderBook GetOrderBook(Instrument instrument&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;-&amp;nbsp; void ExecuteTrade()&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="90.25" width="540" y="120.5" as="geometry" />
+          <mxGeometry height="80.75" width="540" y="130" as="geometry" />
         </mxCell>
         <mxCell id="UzTcX7bS2XZKsBFuMxgP-22" parent="WbD1X7h41OhN-fdEz3TX-7" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="C" vertex="1">
           <mxGeometry height="15" width="15" x="10" y="12.5" as="geometry" />

@@ -89,8 +89,9 @@ Thumbs.db
 *.swp
 *.swo
 *~
-/docs/questions
-/docs/review_1
-/docs/questions/*.bkp
-/docs/.$object-design.drawio.bkp
-/docs/.$object-design.v.0.0.1.drawio.bkp
+clob-system/docs/questions
+clob-system/docs/review_1
+clob-system/docs/questions/*.bkp
+clob-system/docs/.$object-design.drawio.bkp
+clob-system/docs/.$object-design.v.0.0.1.drawio.bkp
+
