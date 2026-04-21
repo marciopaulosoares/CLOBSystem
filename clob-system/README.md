@@ -1,3 +1,6 @@
+# Related Documentation
+
+For details on load testing, see the [CLOB Load Test README](../clob-load-test/README.md).
 # CLOB System — Central Limit Order Book
 
 ![Alt text](../illustration.png)
