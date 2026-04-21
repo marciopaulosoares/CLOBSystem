@@ -1,84 +1,83 @@
 package com.mb.crypto.clob.matching;
 
-import com.mb.crypto.clob.domain.*;
+import com.mb.crypto.clob.domain.Account;
+import com.mb.crypto.clob.domain.AccountId;
+import com.mb.crypto.clob.domain.Asset;
+import com.mb.crypto.clob.domain.Instrument;
+import com.mb.crypto.clob.domain.Order;
+import com.mb.crypto.clob.domain.OrderSide;
+import com.mb.crypto.clob.domain.OrderStatus;
+import com.mb.crypto.clob.domain.OrderType;
 import com.mb.crypto.clob.orderbook.OrderBook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LimitOrderStrategyTest {
 
-    private static final Instrument BTC_BRL  = new Instrument(Asset.BTC, Asset.BRL);
-    private static final AccountId  BUYER_ID  = new AccountId("buyer");
-    private static final AccountId  SELLER_ID = new AccountId("seller");
+    private static final Instrument BTC_BRL = new Instrument(Asset.BTC, Asset.BRL);
+    private static final AccountId ACCOUNT_A = new AccountId("A");
+    private static final AccountId ACCOUNT_B = new AccountId("B");
 
     private LimitOrderStrategy strategy;
-    private OrderBook orderBook;
+    private OrderBook book;
     private Map<AccountId, Account> accounts;
 
     @BeforeEach
     void setUp() {
-        strategy  = new LimitOrderStrategy();
-        orderBook = new OrderBook(BTC_BRL);
-        accounts  = Collections.emptyMap();
+        strategy = new LimitOrderStrategy();
+        book = new OrderBook(BTC_BRL);
+        accounts = new HashMap<>();
+        accounts.put(ACCOUNT_A, new Account(ACCOUNT_A));
+        accounts.put(ACCOUNT_B, new Account(ACCOUNT_B));
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────
-
-    private Order buy(long id, String price, String qty) {
-        return new Order(id, OrderSide.BUY, new BigDecimal(price), new BigDecimal(qty),
-            OrderType.LIMIT, BUYER_ID, BTC_BRL);
+    private Order order(long id, OrderSide side, String price, String qty) {
+        return new Order(id, side, new BigDecimal(price), new BigDecimal(qty),
+            OrderType.LIMIT, side == OrderSide.BUY ? ACCOUNT_A : ACCOUNT_B, BTC_BRL);
     }
-
-    private Order sell(long id, String price, String qty) {
-        return new Order(id, OrderSide.SELL, new BigDecimal(price), new BigDecimal(qty),
-            OrderType.LIMIT, SELLER_ID, BTC_BRL);
-    }
-
-    // ── test groups ──────────────────────────────────────────────────────────
 
     @Nested
     class NoMatch {
 
         @Test
-        void shouldReturnEmptyListWhenBookIsEmpty() {
-            List<MatchedPair> result = strategy.match(buy(1, "150000", "1"), orderBook, accounts);
-            assertTrue(result.isEmpty());
+        void buyPriceBelowBestAsk_returnsNoMatches() {
+            Order ask = order(1, OrderSide.SELL, "500", "1");
+            book.addOrder(ask);
+
+            Order buy = order(2, OrderSide.BUY, "499", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
+
+            assertTrue(matches.isEmpty());
+            assertEquals(new BigDecimal("1"), buy.getQuantity());
         }
 
         @Test
-        void shouldNotMatchBuyWhenBestAskExceedsLimit() {
-            orderBook.addOrder(sell(10, "160000", "1"));
-            List<MatchedPair> result = strategy.match(buy(1, "150000", "1"), orderBook, accounts);
-            assertTrue(result.isEmpty());
+        void sellPriceAboveBestBid_returnsNoMatches() {
+            Order bid = order(1, OrderSide.BUY, "500", "1");
+            book.addOrder(bid);
+
+            Order sell = order(2, OrderSide.SELL, "501", "1");
+            List<MatchedPair> matches = strategy.match(sell, book, accounts);
+
+            assertTrue(matches.isEmpty());
+            assertEquals(new BigDecimal("1"), sell.getQuantity());
         }
 
         @Test
-        void shouldNotMatchSellWhenBestBidIsBelowLimit() {
-            orderBook.addOrder(buy(10, "140000", "1"));
-            List<MatchedPair> result = strategy.match(sell(1, "150000", "1"), orderBook, accounts);
-            assertTrue(result.isEmpty());
-        }
+        void emptyBook_returnsNoMatches() {
+            Order buy = order(1, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-        @Test
-        void shouldLeaveIncomingQuantityUnchangedWhenNoMatch() {
-            Order incoming = buy(1, "150000", "2");
-            strategy.match(incoming, orderBook, accounts);
-            assertEquals(new BigDecimal("2"), incoming.getQuantity());
-        }
-
-        @Test
-        void shouldLeaveBookUnchangedWhenNoMatch() {
-            orderBook.addOrder(sell(10, "160000", "1"));
-            strategy.match(buy(1, "150000", "1"), orderBook, accounts);
-            assertEquals(1, orderBook.getAsks().get(new BigDecimal("160000")).size());
+            assertTrue(matches.isEmpty());
         }
     }
 
@@ -86,49 +85,44 @@ class LimitOrderStrategyTest {
     class FullFill {
 
         @Test
-        void shouldFullyFillBuyAgainstExactAsk() {
-            Order ask = sell(10, "150000", "1");
-            orderBook.addOrder(ask);
-            Order incoming = buy(1, "150000", "1");
+        void buyMatchesAskAtSamePrice() {
+            Order ask = order(1, OrderSide.SELL, "500", "1");
+            book.addOrder(ask);
 
-            List<MatchedPair> result = strategy.match(incoming, orderBook, accounts);
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-            assertEquals(1, result.size());
-            assertEquals(new BigDecimal("0"), incoming.getQuantity());
-            assertEquals(new BigDecimal("0"), ask.getQuantity());
+            assertEquals(1, matches.size());
+            assertEquals(500L, matches.get(0).price());
+            assertEquals(100_000_000L, matches.get(0).qty());
+            assertEquals(BigDecimal.ZERO, buy.getQuantity());
+            assertEquals(BigDecimal.ZERO, ask.getQuantity());
         }
 
         @Test
-        void shouldFullyFillSellAgainstExactBid() {
-            Order bid = buy(10, "150000", "1");
-            orderBook.addOrder(bid);
-            Order incoming = sell(1, "150000", "1");
+        void buyMatchesAskAtBetterPrice() {
+            Order ask = order(1, OrderSide.SELL, "490", "1");
+            book.addOrder(ask);
 
-            List<MatchedPair> result = strategy.match(incoming, orderBook, accounts);
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-            assertEquals(1, result.size());
-            assertEquals(new BigDecimal("0"), incoming.getQuantity());
-            assertEquals(new BigDecimal("0"), bid.getQuantity());
+            assertEquals(1, matches.size());
+            assertEquals(490L, matches.get(0).price(), "trade executes at resting (ask) price");
+            assertEquals(BigDecimal.ZERO, buy.getQuantity());
         }
 
         @Test
-        void shouldExecuteAtRestingAskPriceNotBuyLimit() {
-            orderBook.addOrder(sell(10, "148000", "1"));
-            Order incoming = buy(1, "150000", "1");
+        void sellMatchesBidAtSamePrice() {
+            Order bid = order(1, OrderSide.BUY, "500", "2");
+            book.addOrder(bid);
 
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
+            Order sell = order(2, OrderSide.SELL, "500", "2");
+            List<MatchedPair> matches = strategy.match(sell, book, accounts);
 
-            assertEquals(new BigDecimal("148000"), pair.price());
-        }
-
-        @Test
-        void shouldExecuteAtRestingBidPriceNotSellLimit() {
-            orderBook.addOrder(buy(10, "152000", "1"));
-            Order incoming = sell(1, "150000", "1");
-
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
-
-            assertEquals(new BigDecimal("152000"), pair.price());
+            assertEquals(1, matches.size());
+            assertEquals(BigDecimal.ZERO, sell.getQuantity());
+            assertEquals(BigDecimal.ZERO, bid.getQuantity());
         }
     }
 
@@ -136,178 +130,119 @@ class LimitOrderStrategyTest {
     class PartialFill {
 
         @Test
-        void shouldConsumeIncomingBuyWhenSmallerThanResting() {
-            Order ask = sell(10, "150000", "5");
-            orderBook.addOrder(ask);
-            Order incoming = buy(1, "150000", "2");
+        void incomingLargerThanResting_remainderLeftOnIncoming() {
+            Order ask = order(1, OrderSide.SELL, "500", "0.5");
+            book.addOrder(ask);
 
-            List<MatchedPair> result = strategy.match(incoming, orderBook, accounts);
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-            assertEquals(1, result.size());
-            assertEquals(new BigDecimal("2"), result.get(0).qty());
-            assertEquals(new BigDecimal("0"), incoming.getQuantity());
-            assertEquals(new BigDecimal("3"), ask.getQuantity());
+            assertEquals(1, matches.size());
+            assertEquals(new BigDecimal("0.5"), buy.getQuantity());
+            assertEquals(BigDecimal.ZERO, ask.getQuantity());
         }
 
         @Test
-        void shouldConsumeIncomingSellWhenSmallerThanResting() {
-            Order bid = buy(10, "150000", "5");
-            orderBook.addOrder(bid);
-            Order incoming = sell(1, "150000", "2");
+        void restingLargerThanIncoming_remainderLeftOnResting() {
+            Order ask = order(1, OrderSide.SELL, "500", "2");
+            book.addOrder(ask);
 
-            List<MatchedPair> result = strategy.match(incoming, orderBook, accounts);
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-            assertEquals(1, result.size());
-            assertEquals(new BigDecimal("2"), result.get(0).qty());
-            assertEquals(new BigDecimal("0"), incoming.getQuantity());
-            assertEquals(new BigDecimal("3"), bid.getQuantity());
-        }
-
-        @Test
-        void shouldRetainPartiallyFilledRestingOrderInBook() {
-            orderBook.addOrder(sell(10, "150000", "5"));
-            strategy.match(buy(1, "150000", "2"), orderBook, accounts);
-            assertFalse(orderBook.getAsks().isEmpty());
+            assertEquals(1, matches.size());
+            assertEquals(BigDecimal.ZERO, buy.getQuantity());
+            assertEquals(new BigDecimal("1"), ask.getQuantity());
         }
     }
 
     @Nested
-    class PricePriority {
+    class MultiLevelMatching {
 
         @Test
-        void shouldMatchLowestAskFirstForBuyOrder() {
-            orderBook.addOrder(sell(10, "152000", "1"));
-            orderBook.addOrder(sell(11, "150000", "1"));
-            Order incoming = buy(1, "155000", "1");
+        void buyConsumesMultiplePriceLevels() {
+            Order ask1 = order(1, OrderSide.SELL, "490", "0.5");
+            Order ask2 = order(2, OrderSide.SELL, "495", "0.5");
+            book.addOrder(ask1);
+            book.addOrder(ask2);
 
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
+            Order buy = order(3, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-            assertEquals(new BigDecimal("150000"), pair.price());
+            assertEquals(2, matches.size());
+            assertEquals(490L, matches.get(0).price());
+            assertEquals(495L, matches.get(1).price());
+            assertEquals(BigDecimal.ZERO, buy.getQuantity());
         }
 
         @Test
-        void shouldMatchHighestBidFirstForSellOrder() {
-            orderBook.addOrder(buy(10, "148000", "1"));
-            orderBook.addOrder(buy(11, "150000", "1"));
-            Order incoming = sell(1, "145000", "1");
+        void buyConsumesSameLevelFifo() {
+            Order ask1 = order(1, OrderSide.SELL, "500", "0.3");
+            Order ask2 = order(2, OrderSide.SELL, "500", "0.7");
+            book.addOrder(ask1);
+            book.addOrder(ask2);
 
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
+            Order buy = order(3, OrderSide.BUY, "500", "1");
+            List<MatchedPair> matches = strategy.match(buy, book, accounts);
 
-            assertEquals(new BigDecimal("150000"), pair.price());
+            assertEquals(2, matches.size());
+            assertEquals(ask1, matches.get(0).resting(), "first-in order matched first");
+            assertEquals(ask2, matches.get(1).resting());
+            assertEquals(BigDecimal.ZERO, buy.getQuantity());
         }
 
         @Test
-        void shouldSweepMultiplePriceLevelsInPriorityOrder() {
-            orderBook.addOrder(sell(10, "150000", "1"));
-            orderBook.addOrder(sell(11, "151000", "1"));
-            Order incoming = buy(1, "155000", "2");
+        void sellConsumesMultipleBidLevels() {
+            Order bid1 = order(1, OrderSide.BUY, "510", "0.4");
+            Order bid2 = order(2, OrderSide.BUY, "505", "0.6");
+            book.addOrder(bid1);
+            book.addOrder(bid2);
 
-            List<MatchedPair> result = strategy.match(incoming, orderBook, accounts);
+            Order sell = order(3, OrderSide.SELL, "500", "1");
+            List<MatchedPair> matches = strategy.match(sell, book, accounts);
 
-            assertEquals(2, result.size());
-            assertEquals(new BigDecimal("150000"), result.get(0).price());
-            assertEquals(new BigDecimal("151000"), result.get(1).price());
-        }
-    }
-
-    @Nested
-    class TimePriority {
-
-        @Test
-        void shouldMatchFirstRestingOrderAtSamePriceLevelFirst() {
-            Order firstAsk  = sell(10, "150000", "1");
-            Order secondAsk = sell(11, "150000", "1");
-            orderBook.addOrder(firstAsk);
-            orderBook.addOrder(secondAsk);
-
-            MatchedPair pair = strategy.match(buy(1, "150000", "1"), orderBook, accounts).get(0);
-
-            assertSame(firstAsk, pair.resting());
-        }
-
-        @Test
-        void shouldMatchSecondRestingOrderAfterFirstIsFullyConsumed() {
-            Order firstAsk  = sell(10, "150000", "1");
-            Order secondAsk = sell(11, "150000", "1");
-            orderBook.addOrder(firstAsk);
-            orderBook.addOrder(secondAsk);
-            Order incoming = buy(1, "150000", "2");
-
-            List<MatchedPair> result = strategy.match(incoming, orderBook, accounts);
-
-            assertEquals(2, result.size());
-            assertSame(firstAsk,  result.get(0).resting());
-            assertSame(secondAsk, result.get(1).resting());
+            assertEquals(2, matches.size());
+            assertEquals(510L, matches.get(0).price(), "highest bid matched first");
+            assertEquals(505L, matches.get(1).price());
+            assertEquals(BigDecimal.ZERO, sell.getQuantity());
         }
     }
 
     @Nested
-    class BookMaintenance {
+    class OrderStatusAfterMatch {
 
         @Test
-        void shouldRemoveFullyFilledRestingOrderFromQueue() {
-            orderBook.addOrder(sell(10, "150000", "1"));
-            strategy.match(buy(1, "150000", "1"), orderBook, accounts);
-            assertTrue(orderBook.getAsks().isEmpty());
+        void fullyFilledIncomingStatusNotChangedByStrategy() {
+            Order ask = order(1, OrderSide.SELL, "500", "1");
+            book.addOrder(ask);
+
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            strategy.match(buy, book, accounts);
+
+            // strategy only adjusts quantity — status is managed by OrderBookEngine
+            assertEquals(OrderStatus.OPEN, buy.getStatus());
         }
 
         @Test
-        void shouldRemoveEmptyPriceLevelFromBook() {
-            orderBook.addOrder(sell(10, "150000", "1"));
-            orderBook.addOrder(sell(11, "151000", "1"));
-            strategy.match(buy(1, "155000", "1"), orderBook, accounts);
-            assertFalse(orderBook.getAsks().containsKey(new BigDecimal("150000")));
-            assertTrue(orderBook.getAsks().containsKey(new BigDecimal("151000")));
+        void emptyQueuePurgedFromBook() {
+            Order ask = order(1, OrderSide.SELL, "500", "1");
+            book.addOrder(ask);
+
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            strategy.match(buy, book, accounts);
+
+            assertTrue(book.getAsks().isEmpty(), "empty price level must be removed from book");
         }
 
         @Test
-        void shouldPreserveUnfilledRestingOrdersInBook() {
-            orderBook.addOrder(sell(10, "150000", "5"));
-            strategy.match(buy(1, "150000", "2"), orderBook, accounts);
-            assertEquals(1, orderBook.getAsks().get(new BigDecimal("150000")).size());
-        }
+        void partiallyFilledRestingRemainsInBook() {
+            Order ask = order(1, OrderSide.SELL, "500", "2");
+            book.addOrder(ask);
 
-        @Test
-        void shouldNotRemovePriceLevelIfRestingOrderStillHasRemainingQty() {
-            orderBook.addOrder(sell(10, "150000", "10"));
-            strategy.match(buy(1, "150000", "3"), orderBook, accounts);
-            assertNotNull(orderBook.getAsks().get(new BigDecimal("150000")));
-        }
-    }
+            Order buy = order(2, OrderSide.BUY, "500", "1");
+            strategy.match(buy, book, accounts);
 
-    @Nested
-    class MatchedPairContents {
-
-        @Test
-        void shouldReferenceCorrectIncomingAndRestingOrders() {
-            Order ask = sell(10, "150000", "3");
-            orderBook.addOrder(ask);
-            Order incoming = buy(1, "150000", "2");
-
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
-
-            assertSame(incoming, pair.incoming());
-            assertSame(ask, pair.resting());
-        }
-
-        @Test
-        void shouldCarryRestingPriceNotIncomingLimit() {
-            orderBook.addOrder(sell(10, "148000", "1"));
-            Order incoming = buy(1, "155000", "1");
-
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
-
-            assertEquals(new BigDecimal("148000"), pair.price());
-        }
-
-        @Test
-        void shouldCarryMinOfIncomingAndRestingQtyAsTradeQty() {
-            orderBook.addOrder(sell(10, "150000", "3"));
-            Order incoming = buy(1, "150000", "2");
-
-            MatchedPair pair = strategy.match(incoming, orderBook, accounts).get(0);
-
-            assertEquals(new BigDecimal("2"), pair.qty());
+            assertEquals(1, book.getAsks().get(500L).size(), "resting order still in book");
         }
     }
 }

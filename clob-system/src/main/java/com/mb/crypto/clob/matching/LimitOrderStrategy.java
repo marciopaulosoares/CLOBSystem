@@ -6,7 +6,6 @@ import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.orderbook.OrderBook;
 
-import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,29 +19,31 @@ import java.util.NavigableMap;
  * to the order's limit price. A sell limit order matches against resting bids whose
  * price is greater than or equal to the order's limit price. Partial fills are
  * supported; unmatched remainder rests in the book.
+ *
+ * <p>All price and quantity comparisons use primitive long to avoid BigDecimal allocations
+ * on the hot path.
  */
 public final class LimitOrderStrategy implements OrderMatcher {
 
     @Override
     public List<MatchedPair> match(Order incoming, OrderBook orderBook, Map<AccountId, Account> accounts) {
 
-        List<MatchedPair> matches = new ArrayList<>();
+        List<MatchedPair> matches = new ArrayList<>(4);
 
-        NavigableMap<BigDecimal, ArrayDeque<Order>> book =
+        NavigableMap<Long, ArrayDeque<Order>> book =
             incoming.getSide() == OrderSide.BUY
                 ? orderBook.getAsks()
                 : orderBook.getBids();
 
-        while (incoming.getQuantity().compareTo(BigDecimal.ZERO) > 0 && !book.isEmpty()) {
+        while (incoming.getQuantityLong() > 0 && !book.isEmpty()) {
 
-            Map.Entry<BigDecimal, ArrayDeque<Order>> bestEntry = book.firstEntry();
-
-            BigDecimal bestPrice = bestEntry.getKey();
+            Map.Entry<Long, ArrayDeque<Order>> bestEntry = book.firstEntry();
+            long bestPrice = bestEntry.getKey();
 
             boolean priceMatches =
                 incoming.getSide() == OrderSide.BUY
-                    ? bestPrice.compareTo(incoming.getPrice()) <= 0
-                    : bestPrice.compareTo(incoming.getPrice()) >= 0;
+                    ? bestPrice <= incoming.getPriceLong()
+                    : bestPrice >= incoming.getPriceLong();
 
             if (!priceMatches) {
                 break;
@@ -50,17 +51,17 @@ public final class LimitOrderStrategy implements OrderMatcher {
 
             ArrayDeque<Order> queue = bestEntry.getValue();
 
-            while (!queue.isEmpty() && incoming.getQuantity().compareTo(BigDecimal.ZERO) > 0) {
+            while (!queue.isEmpty() && incoming.getQuantityLong() > 0) {
 
                 Order resting = queue.peek();
-                BigDecimal tradedQty = incoming.getQuantity().min(resting.getQuantity());
+                long tradedQty = Math.min(incoming.getQuantityLong(), resting.getQuantityLong());
 
                 matches.add(new MatchedPair(incoming, resting, bestPrice, tradedQty));
 
                 incoming.decreaseQuantity(tradedQty);
                 resting.decreaseQuantity(tradedQty);
 
-                if (resting.getQuantity().compareTo(BigDecimal.ZERO) == 0) {
+                if (resting.getQuantityLong() == 0) {
                     queue.poll();
                 }
             }

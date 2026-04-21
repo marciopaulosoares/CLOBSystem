@@ -6,6 +6,7 @@ import com.mb.crypto.clob.domain.Instrument;
 import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.domain.OrderType;
+import com.mb.crypto.clob.domain.Scales;
 import com.mb.crypto.clob.domain.Trade;
 import com.mb.crypto.clob.orderbook.InstrumentLockRegistry;
 import com.mb.crypto.clob.orderbook.OrderBook;
@@ -34,7 +35,7 @@ public final class OrderBookEngine implements MatchingEngine {
     private final Map<Instrument, OrderBook> orderBooksByInstrument;
     private final Map<AccountId, Account> accounts;
     private final InstrumentLockRegistry lockRegistry;
-    private final Map<OrderType, OrderMatcher> matchers;
+    private final OrderMatcher[] matchers;
     private final OrderValidator validator;
     private final AtomicLong tradeIdSequence = new AtomicLong(0);
 
@@ -45,10 +46,9 @@ public final class OrderBookEngine implements MatchingEngine {
         this.lockRegistry = new InstrumentLockRegistry();
         this.orderBooksByInstrument = instruments.stream()
             .collect(Collectors.toMap(i -> i, OrderBook::new));
-        this.matchers = Map.of(
-            OrderType.LIMIT, new LimitOrderStrategy()
-        // TODO: add OrderType.MARKET -> new MarketOrderStrategy() when implemented
-        );
+        this.matchers = new OrderMatcher[OrderType.values().length];
+        this.matchers[OrderType.LIMIT.ordinal()] = new LimitOrderStrategy();
+        // TODO: matchers[OrderType.MARKET.ordinal()] = new MarketOrderStrategy();
         this.validator = new OrderValidator();
 
     }
@@ -63,10 +63,10 @@ public final class OrderBookEngine implements MatchingEngine {
         try {
             Account account = accounts.get(order.getAccountId());
             if (order.getSide() == OrderSide.BUY) {
-                account.lock(order.getInstrument().quote(),
-                    order.getPrice().multiply(order.getQuantity()));
+                account.lock(order.getInstrument().quote(), notional(order));
             } else {
-                account.lock(order.getInstrument().base(), order.getQuantity());
+                account.lock(order.getInstrument().base(),
+                    BigDecimal.valueOf(order.getQuantityLong(), Scales.QUANTITY_DECIMALS));
             }
 
             OrderBook book = orderBooksByInstrument.get(order.getInstrument());
@@ -74,7 +74,7 @@ public final class OrderBookEngine implements MatchingEngine {
                 throw new IllegalArgumentException(
                     "No order book for instrument: " + order.getInstrument());
             }
-            OrderMatcher matcher = matchers.get(order.getType());
+            OrderMatcher matcher = matchers[order.getType().ordinal()];
             if (matcher == null) {
                 throw new IllegalArgumentException(
                     "No matcher registered for order type: " + order.getType());
@@ -111,10 +111,10 @@ public final class OrderBookEngine implements MatchingEngine {
 
             Account account = accounts.get(order.getAccountId());
             if (order.getSide() == OrderSide.BUY) {
-                account.unlock(order.getInstrument().quote(),
-                    order.getPrice().multiply(order.getQuantity()));
+                account.unlock(order.getInstrument().quote(), notional(order));
             } else {
-                account.unlock(order.getInstrument().base(), order.getQuantity());
+                account.unlock(order.getInstrument().base(),
+                    BigDecimal.valueOf(order.getQuantityLong(), Scales.QUANTITY_DECIMALS));
             }
         } finally {
             lock.unlockWrite(stamp);
@@ -144,12 +144,16 @@ public final class OrderBookEngine implements MatchingEngine {
         Order buyer  = match.incoming().getSide() == OrderSide.BUY ? match.incoming() : match.resting();
         Order seller = match.incoming().getSide() == OrderSide.BUY ? match.resting()  : match.incoming();
 
+        BigDecimal qty     = BigDecimal.valueOf(match.qty(), Scales.QUANTITY_DECIMALS);
+        BigDecimal price   = BigDecimal.valueOf(match.price());
+        BigDecimal notional = price.multiply(qty);
+
         Trade trade = new Trade(
             tradeIdSequence.incrementAndGet(),
             buyer.getOrderId(),
             seller.getOrderId(),
-            match.qty(),
-            match.price(),
+            qty,
+            price,
             Instant.now(),
             buyer.getAccountId(),
             seller.getAccountId()
@@ -158,13 +162,18 @@ public final class OrderBookEngine implements MatchingEngine {
         Instrument instrument = buyer.getInstrument();
 
         accounts.get(seller.getAccountId())
-            .settle(instrument.base(), match.qty(), instrument.quote(), match.qty().multiply(match.price()), trade);
+            .settle(instrument.base(), qty, instrument.quote(), notional, trade);
 
         accounts.get(buyer.getAccountId())
-            .settle(instrument.quote(), match.qty().multiply(match.price()), instrument.base(), match.qty(), trade);
+            .settle(instrument.quote(), notional, instrument.base(), qty, trade);
 
         updateOrderStatus(buyer);
         updateOrderStatus(seller);
+    }
+
+    private static BigDecimal notional(Order order) {
+        return BigDecimal.valueOf(order.getPriceLong())
+            .multiply(BigDecimal.valueOf(order.getQuantityLong(), Scales.QUANTITY_DECIMALS));
     }
 
     private void updateOrderStatus(Order order) {

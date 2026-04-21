@@ -16,16 +16,16 @@ import java.util.Objects;
 //
 // Verified layout (HotSpot 21, compressed-oops, 12-byte header):
 //
-//   offset  12 –  15 : status          (ref, 4 b — backfilled into alignment gap)
-//   offset  16 –  71 : OrderLeadPad    (7 × long, 56 b)          ← cache line 0
-//   offset  72 –  79 : quantityLong    (long, 8 b)                ← cache line 1
-//   offset  80 –  83 : updatedAt       (ref, 4 b)                 ← cache line 1
-//   offset  88 – 143 : OrderTrailPad   (7 × long, 56 b)           ← cache line 1
-//   offset 144+      : Order immutable fields (orderId, priceLong, refs) ← cache line 2
+//   offset  12 –  15 : statusOrdinal   (int,  4 b — backfilled into alignment gap)
+//   offset  16 –  71 : OrderLeadPad    (7 × long, 56 b)               ← cache line 0
+//   offset  72 –  79 : quantityLong    (long, 8 b)                     ← cache line 1
+//   offset  80 –  87 : updatedAtMillis (long, 8 b)                     ← cache line 1
+//   offset  88 – 143 : OrderTrailPad   (7 × long, 56 b)                ← cache line 1
+//   offset 144+      : Order immutable fields (orderId, priceLong, ...) ← cache line 2
 //
-// Note: HotSpot backfills 'status' into the 4-byte alignment gap before the
-// first 8-byte-aligned long. This places status alone on cache line 0, the other
-// two volatile fields on cache line 1, and all immutables on cache line 2.
+// statusOrdinal (int) backfills into the 4-byte gap before the first long; the other
+// two volatile longs land on cache line 1; all immutables start on cache line 2.
+// All three hot fields are now primitive — no object allocation on write.
 // ---------------------------------------------------------------------------
 
 /** Leading padding: pushes the volatile fields past the first 64-byte cache-line boundary. */
@@ -36,9 +36,9 @@ abstract class OrderLeadPad {
 
 /** The hot volatile fields, isolated from the immutable fields by surrounding padding. */
 abstract class OrderHotFields extends OrderLeadPad {
-    volatile OrderStatus status;
-    volatile long        quantityLong;
-    volatile Instant     updatedAt;
+    volatile int  statusOrdinal;
+    volatile long quantityLong;
+    volatile long updatedAtMillis;
 }
 
 /**
@@ -74,12 +74,14 @@ public final class Order extends OrderTrailPad {
     private static final VarHandle UPDATED_AT;
     private static final VarHandle QUANTITY;
 
+    private static final OrderStatus[] ORDER_STATUS_VALUES = OrderStatus.values();
+
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
-            STATUS     = lookup.findVarHandle(OrderHotFields.class, "status",       OrderStatus.class);
-            UPDATED_AT = lookup.findVarHandle(OrderHotFields.class, "updatedAt",    Instant.class);
-            QUANTITY   = lookup.findVarHandle(OrderHotFields.class, "quantityLong", long.class);
+            STATUS     = lookup.findVarHandle(OrderHotFields.class, "statusOrdinal",   int.class);
+            UPDATED_AT = lookup.findVarHandle(OrderHotFields.class, "updatedAtMillis", long.class);
+            QUANTITY   = lookup.findVarHandle(OrderHotFields.class, "quantityLong",    long.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -87,7 +89,7 @@ public final class Order extends OrderTrailPad {
 
     private final long       orderId;
     private final long       priceLong;
-    private final Instant    createdAt;
+    private final long       createdAtMillis;
     private final OrderSide  side;
     private final OrderType  type;
     private final AccountId  accountId;
@@ -119,11 +121,11 @@ public final class Order extends OrderTrailPad {
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Quantity must be positive");
         }
-        this.priceLong    = price.movePointRight(Scales.PRICE_DECIMALS).longValueExact();
-        this.quantityLong = quantity.movePointRight(Scales.QUANTITY_DECIMALS).longValueExact();
-        this.createdAt    = Instant.now();
-        this.updatedAt    = this.createdAt;
-        this.status       = OrderStatus.OPEN;
+        this.priceLong       = price.movePointRight(Scales.PRICE_DECIMALS).longValueExact();
+        this.quantityLong    = quantity.movePointRight(Scales.QUANTITY_DECIMALS).longValueExact();
+        this.createdAtMillis = System.currentTimeMillis();
+        this.updatedAtMillis = this.createdAtMillis;
+        this.statusOrdinal   = OrderStatus.OPEN.ordinal();
     }
 
     public long getOrderId() {
@@ -162,15 +164,15 @@ public final class Order extends OrderTrailPad {
     }
 
     public Instant getCreatedAt() {
-        return createdAt;
+        return Instant.ofEpochMilli(createdAtMillis);
     }
 
     public Instant getUpdatedAt() {
-        return updatedAt;
+        return Instant.ofEpochMilli(updatedAtMillis);
     }
 
     public OrderStatus getStatus() {
-        return status;
+        return ORDER_STATUS_VALUES[statusOrdinal];
     }
 
     public OrderType getType() {
@@ -214,9 +216,9 @@ public final class Order extends OrderTrailPad {
     boolean updateStatus(OrderStatus expected, OrderStatus newStatus) {
         Objects.requireNonNull(expected,  "Expected status cannot be null");
         Objects.requireNonNull(newStatus, "New status cannot be null");
-        boolean updated = STATUS.compareAndSet(this, expected, newStatus);
+        boolean updated = STATUS.compareAndSet(this, expected.ordinal(), newStatus.ordinal());
         if (updated) {
-            UPDATED_AT.setVolatile(this, Instant.now());
+            UPDATED_AT.setVolatile(this, System.currentTimeMillis());
         }
         return updated;
     }
@@ -227,7 +229,7 @@ public final class Order extends OrderTrailPad {
         }
         boolean updated = QUANTITY.compareAndSet(this, quantityLong, newQuantity);
         if (updated) {
-            UPDATED_AT.setVolatile(this, Instant.now());
+            UPDATED_AT.setVolatile(this, System.currentTimeMillis());
         }
     }
 }

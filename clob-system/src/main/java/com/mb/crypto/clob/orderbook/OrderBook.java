@@ -5,7 +5,6 @@ import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.domain.OrderStatus;
 
-import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Comparator;
@@ -18,6 +17,7 @@ import java.util.TreeMap;
  *
  * <p>Bids are stored in descending price order (highest bid = best bid = firstKey()).
  * Asks are stored in ascending price order (lowest ask = best ask = firstKey()).
+ * Price keys are stored as long (integer BRL, Scales.PRICE_DECIMALS = 0).
  *
  * <p>Not thread-safe by itself: all access must be guarded by the StampedLock
  * obtained from InstrumentLockRegistry for the corresponding instrument.
@@ -25,16 +25,18 @@ import java.util.TreeMap;
 public final class OrderBook {
 
     private final Instrument instrument;
-    private final NavigableMap<BigDecimal, ArrayDeque<Order>> bids;
-    private final NavigableMap<BigDecimal, ArrayDeque<Order>> asks;
+    private final NavigableMap<Long, ArrayDeque<Order>> bids;
+    private final NavigableMap<Long, ArrayDeque<Order>> asks;
 
     public Instrument getInstrument() {
         return instrument;
     }
-    public NavigableMap<BigDecimal, ArrayDeque<Order>> getBids() {
+
+    public NavigableMap<Long, ArrayDeque<Order>> getBids() {
         return Collections.unmodifiableNavigableMap(bids);
     }
-    public NavigableMap<BigDecimal, ArrayDeque<Order>> getAsks() {
+
+    public NavigableMap<Long, ArrayDeque<Order>> getAsks() {
         return Collections.unmodifiableNavigableMap(asks);
     }
 
@@ -45,15 +47,13 @@ public final class OrderBook {
     }
 
     public void addOrder(Order order) {
-
-        NavigableMap<BigDecimal, ArrayDeque<Order>> side =
+        NavigableMap<Long, ArrayDeque<Order>> side =
             order.getSide() == OrderSide.BUY ? bids : asks;
-
-        side.computeIfAbsent(order.getPrice(), k -> new ArrayDeque<>()).add(order);
+        side.computeIfAbsent(order.getPriceLong(), k -> new ArrayDeque<>()).add(order);
     }
 
-    public void purgeEmptyLevel(BigDecimal price, OrderSide side) {
-        NavigableMap<BigDecimal, ArrayDeque<Order>> map = side == OrderSide.BUY ? bids : asks;
+    public void purgeEmptyLevel(long price, OrderSide side) {
+        NavigableMap<Long, ArrayDeque<Order>> map = side == OrderSide.BUY ? bids : asks;
         ArrayDeque<Order> queue = map.get(price);
         if (queue != null && queue.isEmpty()) {
             map.remove(price);
@@ -67,15 +67,15 @@ public final class OrderBook {
             throw new IllegalStateException(
                 "Order " + order.getOrderId() + " is not active: " + status);
         }
-        NavigableMap<BigDecimal, ArrayDeque<Order>> side =
+        NavigableMap<Long, ArrayDeque<Order>> side =
             order.getSide() == OrderSide.BUY ? bids : asks;
-        ArrayDeque<Order> queue = side.get(order.getPrice());
+        ArrayDeque<Order> queue = side.get(order.getPriceLong());
         if (queue == null || !queue.remove(order)) {
             throw new IllegalArgumentException(
                 "Order not found in book: " + order.getOrderId());
         }
         if (queue.isEmpty()) {
-            side.remove(order.getPrice());
+            side.remove(order.getPriceLong());
         }
         order.cancel();
     }
