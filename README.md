@@ -9,6 +9,8 @@ It includes a separate module for load testing to simulate real-world trading co
 
 ## Core Components
 
+![Alt text](./clob-system/docs/object-design.v.0.0.1.png)
+
 * **OrderBook**
   Maintains bid and ask sides using price-time priority.
 
