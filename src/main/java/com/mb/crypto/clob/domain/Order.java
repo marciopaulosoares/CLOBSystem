@@ -103,7 +103,9 @@ public final class Order {
     }
 
     public void cancel() {
-        updateStatus(OrderStatus.OPEN, OrderStatus.CANCELED);
+        if (!updateStatus(OrderStatus.OPEN, OrderStatus.CANCELED)) {
+            updateStatus(OrderStatus.PARTIALLY_FILLED, OrderStatus.CANCELED);
+        }
     }
 
     public void applyFill() {

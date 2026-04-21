@@ -400,6 +400,17 @@ class ClobSystemTest {
         }
 
         @Test
+        void shouldCancelPartiallyFilledOrder() {
+            system.placeOrder(bobSell(10, "300000", "2"));
+            Order bid = aliceBuy(1, "300000", "5");
+            system.placeOrder(bid);
+            assertEquals(OrderStatus.PARTIALLY_FILLED, bid.getStatus());
+            system.cancelOrder(bid);
+            assertEquals(OrderStatus.CANCELED, bid.getStatus());
+            assertTrue(system.getOrderBook(BTC_BRL).getBids().isEmpty());
+        }
+
+        @Test
         void shouldUnlockQuoteAssetOnBuyOrderCancel() {
             BigDecimal brlBefore = alice.getAvailableBalance(Asset.BRL);
             Order bid = aliceBuy(1, "300000", "1");
