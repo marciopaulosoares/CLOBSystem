@@ -57,12 +57,21 @@ Load testing tool for the Central Limit Order Book system.
 
 ## Steps to run
 
-1. Clone the repository and navigate to `clob-load-test/`
-2. Copy `env-example.txt` to `.env` and adjust the parameters (optional — defaults are applied automatically)
-3. **On Linux/macOS:** Run `./run.sh`
+1. Clone the repository.
+2. **Important:** From the root of the repository (where the main `pom.xml` is located), run:
+
+	```
+	mvn clean install
+	```
+
+	This step installs all modules, including the parent POM, into your local Maven repository. It is required before running the load test scripts for the first time or after cloning the project.
+
+3. Navigate to `clob-load-test/`
+4. Copy `env-example.txt` to `.env` and adjust the parameters (optional — defaults are applied automatically)
+5. **On Linux/macOS:** Run `./run.sh`
    
 	**On Windows:** Run `run.bat`
-4. Results are printed to the console and saved to `logs/report.txt`
+6. Results are printed to the console and saved to `logs/report.txt`
 
 ## Parameters
 
