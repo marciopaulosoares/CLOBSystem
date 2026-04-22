@@ -72,6 +72,39 @@ Tests run with ZGC (`-XX:+UseZGC`) to simulate low-pause production conditions.
 ---
 
 
+## Test Coverage
+
+Tests are organized into two layers: **unit tests** for each domain component and **concurrency tests** that verify safety and liveness properties under parallel execution.
+
+### Unit Tests
+
+| Test Class | What it verifies |
+|---|---|
+| `OrderTest` | Order construction, field immutability, status transitions |
+| `AccountTest` | Deposit, withdraw, balance isolation across assets |
+| `BalanceTest` | Fixed-point balance arithmetic and boundary conditions |
+| `LimitOrderStrategyTest` | Price-time priority matching, partial fills, multi-level sweep |
+| `OrderBookEngineTest` | Full-fill, partial-fill, no-match, cancel, balance locking, validation |
+| `ClobSystemTest` | Facade delegation: place, cancel, deposit, withdraw, getOrderBook |
+| `InstrumentLockRegistryTest` | Lazy lock creation, per-instrument isolation |
+
+### Concurrency Tests (`OrderBookEngineConcurrencyTest`)
+
+Six properties verified under concurrent load using virtual threads (Java 21):
+
+| # | Property | Scenario |
+|---|---|---|
+| 1 | **Quantity conservation** | N buyers and N sellers trade concurrently — BTC delivered equals BTC taken |
+| 2 | **Value conservation** | Total BRL across all accounts is identical before and after concurrent trades |
+| 3 | **No over-fill** | A single large resting order targeted by more aggressors than its quantity allows — never filled beyond capacity |
+| 4 | **No lost trades** | N perfectly matched pairs submitted concurrently all result in FILLED status; book is empty afterwards |
+| 5 | **Cancel-vs-fill race** | One thread fills, another cancels — order always ends in exactly one terminal state (FILLED or CANCELED) |
+| 6 | **Instrument independence** | Two instruments traded concurrently never deadlock or block each other |
+
+![Tests passing](docs/tests-ok.png)
+
+---
+
 ## AI-Assisted Development
 
 This project was built using **Claude** (Anthropic) following the **4D AI Fluency Framework**:
