@@ -1,13 +1,3 @@
-# CLOB System Documentation
-
-For a detailed overview of the core Central Limit Order Book (CLOB) system, including architecture, domain model, and implementation details, see the [clob-system/README.md](clob-system/README.md).
-
-This document covers:
-- System architecture and design
-- Domain model (accounts, orders, trades, etc.)
-- Key classes and their responsibilities
-- How to run and test the core system
-- Additional documentation and diagrams
 # CLOB System
 
 ## Overview
@@ -110,18 +100,31 @@ bob BTC: 2.00000000
 
 ---
 
-## Load Test Module
+## Load Testing
 
-* Module: `clob-load-test`
-* Simulates high-volume concurrent order flow
-* Configurable load profile (threads, rate, duration)
-* Measures:
+The [`clob-load-test`](clob-load-test/README.md) module stress-tests the engine under sustained concurrent traffic, simulating realistic market behavior: order placement, cancellations, and book queries across multiple accounts and price levels.
 
-    * throughput (orders/sec)
-    * latency (average, p95, p99)
-    * execution rate
+It measures throughput (orders/sec), average and tail latencies (P95, P99), execution rate, and failed operations — all printed to the console and saved to `logs/report.txt`.
 
-Used to validate system behavior under stress and concurrency.
+**Quick start:**
+
+```bash
+cd clob-load-test
+cp env-example.txt .env   # optional — defaults are applied automatically
+./run.sh
+```
+
+Key parameters (via `.env`):
+
+| Parameter | Default | Description |
+|---|---|---|
+| `THREAD_COUNT` | `10` | Concurrent threads |
+| `TEST_DURATION_SECONDS` | `30` | How long the test runs |
+| `ORDERS_PER_SECOND` | `1000` | Target throughput |
+| `NUMBER_OF_ACCOUNTS` | `50` | Simulated trading accounts |
+| `INITIAL_LIQUIDITY_DEPTH` | `500` | Orders pre-loaded before the test |
+
+See the [full parameter reference](clob-load-test/README.md#parameters) for all options.
 
 ---
 

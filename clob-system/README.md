@@ -1,6 +1,3 @@
-# Related Documentation
-
-For details on load testing, see the [CLOB Load Test README](../clob-load-test/README.md).
 # CLOB System — Central Limit Order Book
 
 ![Alt text](../illustration.png)
@@ -102,6 +99,34 @@ Six properties verified under concurrent load using virtual threads (Java 21):
 | 6 | **Instrument independence** | Two instruments traded concurrently never deadlock or block each other |
 
 ![Tests passing](docs/tests-ok.png)
+
+---
+
+## Load Testing
+
+The [`clob-load-test`](../clob-load-test/README.md) module stress-tests the engine under sustained concurrent traffic, simulating realistic market behavior: order placement, cancellations, and book queries across multiple accounts and price levels.
+
+It measures throughput (orders/sec), average and tail latencies (P95, P99), execution rate, and failed operations — all printed to the console and saved to `logs/report.txt`.
+
+**Quick start:**
+
+```bash
+cd clob-load-test
+cp env-example.txt .env   # optional — defaults are applied automatically
+./run.sh
+```
+
+Key parameters (via `.env`):
+
+| Parameter | Default | Description |
+|---|---|---|
+| `THREAD_COUNT` | `10` | Concurrent threads |
+| `TEST_DURATION_SECONDS` | `30` | How long the test runs |
+| `ORDERS_PER_SECOND` | `1000` | Target throughput |
+| `NUMBER_OF_ACCOUNTS` | `50` | Simulated trading accounts |
+| `INITIAL_LIQUIDITY_DEPTH` | `500` | Orders pre-loaded before the test |
+
+See the [full parameter reference](../clob-load-test/README.md#parameters) for all options.
 
 ---
 
