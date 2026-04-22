@@ -59,7 +59,9 @@ Load testing tool for the Central Limit Order Book system.
 
 1. Clone the repository and navigate to `clob-load-test/`
 2. Copy `env-example.txt` to `.env` and adjust the parameters (optional — defaults are applied automatically)
-3. Run `./run.sh`
+3. **On Linux/macOS:** Run `./run.sh`
+   
+	**On Windows:** Run `run.bat`
 4. Results are printed to the console and saved to `logs/report.txt`
 
 ## Parameters
