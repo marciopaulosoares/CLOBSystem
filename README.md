@@ -47,6 +47,69 @@ Run the core system or load test module using the generated artifacts.
 
 ---
 
+## Running the Main Scenarios
+
+`Main.java` in the `clob-system` module demonstrates five basic trading scenarios:
+full fill, partial fill, no match, cancel, and multi-level sweep.
+
+Run from the project root:
+
+```bash
+mvn -pl clob-system exec:java -Dexec.mainClass=com.mb.crypto.clob.Main
+```
+
+Or from inside the `clob-system` directory:
+
+```bash
+mvn exec:java -Dexec.mainClass=com.mb.crypto.clob.Main
+```
+
+Expected output (one block per scenario):
+
+```
+=== Case 1: Full Fill ===
+  alice ask            → FILLED
+  bob bid              → FILLED
+  order book:
+    (empty)
+alice BRL: 500.00000000 | bob BTC: 1.00000000
+
+=== Case 2: Partial Fill ===
+  alice ask (3 BTC)    → PARTIALLY_FILLED
+  bob bid  (1 BTC)     → FILLED
+ask remaining qty (satoshis): 200000000
+  order book:
+    ASK   500 BRL  qty=1 orders
+
+=== Case 3: Resting Orders, No Match ===
+  order book:
+    ASK   500 BRL  qty=1 orders
+    BID   400 BRL  qty=1 orders
+
+=== Case 4: Cancel Order ===
+before cancel — book asks: 1 level(s)
+  alice ask            → CANCELED
+after cancel  — book asks: 0 level(s)
+
+=== Case 5: Aggressor Sweeps Multiple Levels ===
+  alice ask @490       → FILLED
+  carol ask @500       → FILLED
+  bob   bid @500       → FILLED
+  order book:
+    (empty)
+bob BTC: 2.00000000
+```
+
+| Scenario | What it demonstrates |
+|---|---|
+| Full Fill | Matching buy and sell at the same price — both orders filled, book empty |
+| Partial Fill | Aggressor smaller than resting order — resting stays in book as `PARTIALLY_FILLED` |
+| No Match | Bid below ask — both orders rest in book, no trade |
+| Cancel | Resting order removed before any match — balance unlocked |
+| Multi-level Sweep | One aggressor consumes two price levels in price-time order |
+
+---
+
 ## Load Test Module
 
 * Module: `clob-load-test`
