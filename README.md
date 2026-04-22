@@ -1,5 +1,7 @@
 # CLOB System
 
+> For full architecture details, concurrency model, domain design, and test coverage see [clob-system/README.md](clob-system/README.md).
+
 ## Overview
 
 This project implements a high-performance **Central Limit Order Book (CLOB)** in Java, focused on low latency, deterministic execution, and high throughput.
