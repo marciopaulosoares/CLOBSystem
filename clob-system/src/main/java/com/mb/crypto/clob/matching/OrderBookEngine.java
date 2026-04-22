@@ -47,8 +47,8 @@ public final class OrderBookEngine implements MatchingEngine {
         this.orderBooksByInstrument = instruments.stream()
             .collect(Collectors.toMap(i -> i, OrderBook::new));
         this.matchers = new OrderMatcher[OrderType.values().length];
-        this.matchers[OrderType.LIMIT.ordinal()] = new LimitOrderStrategy();
-        // TODO: matchers[OrderType.MARKET.ordinal()] = new MarketOrderStrategy();
+        this.matchers[OrderType.LIMIT.code()] = new LimitOrderStrategy();
+        // TODO: matchers[OrderType.MARKET.code()] = new MarketOrderStrategy();
         this.validator = new OrderValidator();
 
     }
@@ -74,7 +74,7 @@ public final class OrderBookEngine implements MatchingEngine {
                 throw new IllegalArgumentException(
                     "No order book for instrument: " + order.getInstrument());
             }
-            OrderMatcher matcher = matchers[order.getType().ordinal()];
+            OrderMatcher matcher = matchers[order.getType().code()];
             if (matcher == null) {
                 throw new IllegalArgumentException(
                     "No matcher registered for order type: " + order.getType());
