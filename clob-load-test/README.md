@@ -1,52 +1,59 @@
 # Example Report
 
-================================================================================
-CLOB LOAD TEST REPORT
-================================================================================
-Generated: 2026-04-25 20:10:31
+## CLOB Load Test Report
 
-LOAD CONFIGURATION
---------------------------------------------------------------------------------
-Thread Count:              20
-Test Duration:            60 seconds
-Target Throughput:        5000 orders/sec
-Number of Accounts:       100
+_Generated: 2026-04-25 20:10:31_
 
-MARKET BEHAVIOR CONFIGURATION
---------------------------------------------------------------------------------
-Base Price:               $100.00
-Price Spread:             $0.50
-Price Volatility:         2.00%
-Initial Liquidity Depth:  1000 orders
+### Load Configuration
 
-OPERATION DISTRIBUTION
---------------------------------------------------------------------------------
-New Orders:               70%
-Cancellations:            20%
-Queries:                  10%
+| Parameter | Value |
+|---|---|
+| Thread Count | 20 |
+| Test Duration | 60 seconds |
+| Target Throughput | 5,000 orders/sec |
+| Number of Accounts | 100 |
 
-TEST RESULTS
---------------------------------------------------------------------------------
-Actual Test Duration:     60 seconds
+### Market Behavior Configuration
 
-ORDER STATISTICS
---------------------------------------------------------------------------------
-Total Orders Submitted:   276,961
-Fully Executed:           67,812
-Partially Executed:       7,079
-Total Executed:           74,891
-Canceled:                 15,989
-Failed Operations:        0
+| Parameter | Value |
+|---|---|
+| Base Price | $100.00 |
+| Price Spread | $0.50 |
+| Price Volatility | 2.00% |
+| Initial Liquidity Depth | 1,000 orders |
 
-PERFORMANCE METRICS
---------------------------------------------------------------------------------
-Execution Rate:           27.04%
-Throughput:               4616.02 orders/sec
-Average Latency:          0.2496 ms
-P95 Latency:              0.6707 ms
-P99 Latency:              0.8742 ms
+### Operation Distribution
 
-================================================================================
+| Operation | Share |
+|---|---|
+| New Orders | 70% |
+| Cancellations | 20% |
+| Queries | 10% |
+
+### Test Results
+
+**Actual Test Duration:** 60 seconds
+
+#### Order Statistics
+
+| Metric | Value |
+|---|---|
+| Total Orders Submitted | 276,961 |
+| Fully Executed | 67,812 |
+| Partially Executed | 7,079 |
+| Total Executed | 74,891 |
+| Canceled | 15,989 |
+| Failed Operations | 0 |
+
+#### Performance Metrics
+
+| Metric | Value |
+|---|---|
+| Execution Rate | 27.04% |
+| Throughput | 4,616.02 orders/sec |
+| Average Latency | 0.2496 ms |
+| P95 Latency | 0.6707 ms |
+| P99 Latency | 0.8742 ms |
 
 # CLOB Load Test
 
