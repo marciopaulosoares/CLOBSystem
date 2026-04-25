@@ -6,11 +6,10 @@ import com.mb.crypto.clob.domain.Order;
 import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.orderbook.OrderBook;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
+import java.util.NavigableSet;
 
 /**
  * Price-time priority matching strategy for LIMIT orders.
@@ -30,18 +29,16 @@ public final class LimitOrderStrategy implements OrderMatcher {
 
         List<MatchedPair> matches = new ArrayList<>(4);
 
-        NavigableMap<Long, ArrayDeque<Order>> book =
-            incoming.getSide() == OrderSide.BUY
-                ? orderBook.getAsks()
-                : orderBook.getBids();
+        OrderSide      restingSide = incoming.getSide() == OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
+        NavigableSet<Long> prices  = incoming.getSide() == OrderSide.BUY
+                ? orderBook.askPrices()
+                : orderBook.bidPrices();
 
-        while (incoming.getQuantityLong() > 0 && !book.isEmpty()) {
+        while (incoming.getQuantityLong() > 0 && !prices.isEmpty()) {
 
-            Map.Entry<Long, ArrayDeque<Order>> bestEntry = book.firstEntry();
-            long bestPrice = bestEntry.getKey();
+            long bestPrice = prices.first();
 
-            boolean priceMatches =
-                incoming.getSide() == OrderSide.BUY
+            boolean priceMatches = incoming.getSide() == OrderSide.BUY
                     ? bestPrice <= incoming.getPriceLong()
                     : bestPrice >= incoming.getPriceLong();
 
@@ -49,11 +46,9 @@ public final class LimitOrderStrategy implements OrderMatcher {
                 break;
             }
 
-            ArrayDeque<Order> queue = bestEntry.getValue();
+            while (!orderBook.isLevelEmpty(bestPrice, restingSide) && incoming.getQuantityLong() > 0) {
 
-            while (!queue.isEmpty() && incoming.getQuantityLong() > 0) {
-
-                Order resting = queue.peek();
+                Order resting  = orderBook.peekHead(bestPrice, restingSide);
                 long tradedQty = Math.min(incoming.getQuantityLong(), resting.getQuantityLong());
 
                 matches.add(new MatchedPair(incoming, resting, bestPrice, tradedQty));
@@ -62,13 +57,8 @@ public final class LimitOrderStrategy implements OrderMatcher {
                 resting.decreaseQuantity(tradedQty);
 
                 if (resting.getQuantityLong() == 0) {
-                    queue.poll();
+                    orderBook.pollHead(bestPrice, restingSide);
                 }
-            }
-
-            if (queue.isEmpty()) {
-                OrderSide restingSide = incoming.getSide() == OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
-                orderBook.purgeEmptyLevel(bestPrice, restingSide);
             }
         }
 

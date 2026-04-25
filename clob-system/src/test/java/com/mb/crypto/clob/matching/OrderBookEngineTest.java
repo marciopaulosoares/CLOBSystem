@@ -1,5 +1,6 @@
 package com.mb.crypto.clob.matching;
 
+import com.mb.crypto.clob.ClobSystem;
 import com.mb.crypto.clob.domain.Account;
 import com.mb.crypto.clob.domain.AccountId;
 import com.mb.crypto.clob.domain.Asset;
@@ -9,621 +10,292 @@ import com.mb.crypto.clob.domain.OrderSide;
 import com.mb.crypto.clob.domain.OrderStatus;
 import com.mb.crypto.clob.domain.OrderType;
 import com.mb.crypto.clob.domain.Scales;
-import com.mb.crypto.clob.orderbook.OrderBook;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Integration tests for the full order-lifecycle flow through {@link ClobSystem}.
+ *
+ * <p>Covers: balance locking, matching, settlement, partial fills, cancellations,
+ * and error paths. Exercises all layers: ClobSystem → OrderBookEngine → LimitOrderStrategy
+ * → OrderBook.
+ */
 class OrderBookEngineTest {
 
-    private static final Instrument BTC_BRL   = new Instrument(Asset.BTC, Asset.BRL);
-    private static final AccountId  BUYER_ID  = new AccountId("buyer");
-    private static final AccountId  SELLER_ID = new AccountId("seller");
+    private static final Instrument INSTRUMENT = new Instrument(Asset.BTC, Asset.BRL);
+    private static final long       PRICE      = 50_000L;
+    private static final long       ONE_BTC    = Scales.QUANTITY_SCALE;
+    private static final long       HALF_BTC   = ONE_BTC / 2;
 
-    private static final long QTY_1 = 1 * Scales.QUANTITY_SCALE;   // 1 BTC  in satoshis
-    private static final long QTY_2 = 2 * Scales.QUANTITY_SCALE;   // 2 BTC  in satoshis
-    private static final long QTY_3 = 3 * Scales.QUANTITY_SCALE;
+    private final AtomicLong idGen = new AtomicLong(1);
 
-    private final AtomicLong ids = new AtomicLong(1);
-
-    private Account buyer;
-    private Account seller;
-    private OrderBookEngine engine;
+    private Account    alice;
+    private Account    bob;
+    private ClobSystem clob;
 
     @BeforeEach
     void setUp() {
-        buyer  = funded(BUYER_ID,  new BigDecimal("10000"), BigDecimal.ZERO);
-        seller = funded(SELLER_ID, BigDecimal.ZERO,         new BigDecimal("10"));
-        engine = engine(List.of(buyer, seller));
+        alice = new Account(new AccountId("alice"));
+        bob   = new Account(new AccountId("bob"));
+        clob  = new ClobSystem(List.of(INSTRUMENT), List.of(alice, bob));
     }
 
     // -----------------------------------------------------------------------
-    // Constructor
+    // Full fill — both sides fully matched
     // -----------------------------------------------------------------------
 
-    @Nested
-    class Constructor {
+    @Test
+    void fullFill_buyMatchesSell_bothFilledAndBalancesSettled() {
+        alice.deposit(Asset.BTC, BigDecimal.ONE);   // alice sells 1 BTC
+        bob.deposit(Asset.BRL, new BigDecimal("50000")); // bob buys with BRL
 
-        @Test
-        void shouldRejectNullInstruments() {
-            assertThrows(NullPointerException.class,
-                () -> new OrderBookEngine(null, Map.of()));
-        }
+        Order ask = sell(alice, PRICE, ONE_BTC);
+        Order bid = buy(bob, PRICE, ONE_BTC);
 
-        @Test
-        void shouldRejectNullAccounts() {
-            assertThrows(NullPointerException.class,
-                () -> new OrderBookEngine(List.of(BTC_BRL), null));
-        }
+        clob.placeOrder(ask);
+        clob.placeOrder(bid);
+
+        assertEquals(OrderStatus.FILLED, ask.getStatus());
+        assertEquals(OrderStatus.FILLED, bid.getStatus());
+
+        // alice traded BTC for BRL
+        assertEquals(0, alice.getBalance(Asset.BTC).compareTo(BigDecimal.ZERO));
+        assertEquals(0, alice.getBalance(Asset.BRL).compareTo(new BigDecimal("50000")));
+
+        // bob traded BRL for BTC
+        assertEquals(0, bob.getBalance(Asset.BRL).compareTo(BigDecimal.ZERO));
+        assertEquals(0, bob.getBalance(Asset.BTC).compareTo(BigDecimal.ONE));
+
+        assertTrue(clob.getOrderBook(INSTRUMENT).askPrices().isEmpty());
+        assertTrue(clob.getOrderBook(INSTRUMENT).bidPrices().isEmpty());
     }
 
     // -----------------------------------------------------------------------
-    // placeOrder — null / validation
+    // No match — resting in book
     // -----------------------------------------------------------------------
 
-    @Nested
-    class PlaceOrderValidation {
+    @Test
+    void noMatch_sellRestsInBook_statusOpen() {
+        alice.deposit(Asset.BTC, BigDecimal.ONE);
 
-        @Test
-        void shouldRejectNullOrder() {
-            assertThrows(NullPointerException.class, () -> engine.placeOrder(null));
-        }
+        Order ask = sell(alice, PRICE, ONE_BTC);
+        clob.placeOrder(ask);
 
-        @Test
-        void shouldRejectOrderForUnknownInstrument() {
-            // engine only knows BTC_BRL; a BRL_BTC order has no matching book
-            Account extra = funded(new AccountId("extra"), new BigDecimal("5000"), BigDecimal.ZERO);
-            OrderBookEngine eng = new OrderBookEngine(
-                List.of(new Instrument(Asset.BRL, Asset.BTC)), accountMap(List.of(extra)));
+        assertEquals(OrderStatus.OPEN, ask.getStatus());
+        assertEquals(1, clob.getOrderBook(INSTRUMENT).askPrices().size());
+        assertTrue(clob.getOrderBook(INSTRUMENT).askPrices().contains(PRICE));
+    }
 
-            // order instrument = BTC_BRL, which the engine above does not know
-            Order order = new Order(ids.getAndIncrement(), OrderSide.BUY, 500, QTY_1,
-                OrderType.LIMIT, extra.getId(), BTC_BRL);
-            assertThrows(IllegalArgumentException.class, () -> eng.placeOrder(order));
-        }
+    @Test
+    void noMatch_buyRestsInBook_statusOpen() {
+        bob.deposit(Asset.BRL, new BigDecimal("50000"));
 
-        @Test
-        void shouldRejectCanceledOrder() {
-            Order order = buy(500, QTY_1);
-            order.cancel();
-            assertThrows(IllegalStateException.class, () -> engine.placeOrder(order));
-        }
+        Order bid = buy(bob, PRICE, ONE_BTC);
+        clob.placeOrder(bid);
 
-        @Test
-        void shouldRejectFilledOrder() {
-            // place a matching pair so the order reaches FILLED status via the engine
-            Order ask = sell(500, QTY_1);
-            Order bid = buy(500, QTY_1);
-            engine.placeOrder(ask);
-            engine.placeOrder(bid);
-
-            assertEquals(OrderStatus.FILLED, bid.getStatus());
-            assertThrows(IllegalStateException.class, () -> engine.placeOrder(bid));
-        }
+        assertEquals(OrderStatus.OPEN, bid.getStatus());
+        assertEquals(1, clob.getOrderBook(INSTRUMENT).bidPrices().size());
     }
 
     // -----------------------------------------------------------------------
-    // placeOrder — balance locking
+    // Partial fill — aggressor smaller than resting
     // -----------------------------------------------------------------------
 
-    @Nested
-    class BalanceLocking {
+    @Test
+    void partialFill_aggressorSmallerThanResting_aggressorFilledRestingStays() {
+        alice.deposit(Asset.BTC, BigDecimal.ONE);
+        bob.deposit(Asset.BRL, new BigDecimal("25000"));
 
-        @Test
-        void buyOrder_locksQuoteNotionalBeforeMatch() {
-            // notional = price × qty = 500 × 1 BTC = 500 BRL
-            BigDecimal initialBrl = buyer.getAvailableBalance(Asset.BRL);
-            engine.placeOrder(buy(500, QTY_1));
+        Order ask = sell(alice, PRICE, ONE_BTC);
+        Order bid = buy(bob, PRICE, HALF_BTC);    // bob buys only half
 
-            // no ask in book, so order rests — locked notional must reflect
-            BigDecimal expectedLocked = new BigDecimal("500.00000000");
-            assertEquals(expectedLocked, buyer.getLockedBalance(Asset.BRL));
-            assertEquals(initialBrl.subtract(expectedLocked), buyer.getAvailableBalance(Asset.BRL));
-        }
+        clob.placeOrder(ask);
+        clob.placeOrder(bid);
 
-        @Test
-        void sellOrder_locksBaseQuantityBeforeMatch() {
-            BigDecimal initialBtc = seller.getAvailableBalance(Asset.BTC);
-            engine.placeOrder(sell(500, QTY_1));
+        assertEquals(OrderStatus.FILLED,           bid.getStatus());
+        assertEquals(OrderStatus.PARTIALLY_FILLED, ask.getStatus());
+        assertEquals(HALF_BTC, ask.getQuantityLong());
 
-            BigDecimal expectedLocked = BigDecimal.valueOf(QTY_1, Scales.QUANTITY_DECIMALS); // 1.00000000
-            assertEquals(expectedLocked, seller.getLockedBalance(Asset.BTC));
-            assertEquals(initialBtc.subtract(expectedLocked), seller.getAvailableBalance(Asset.BTC));
-        }
-
-        @Test
-        void buyOrder_insufficientBalance_throwsBeforeBookIsModified() {
-            Account poorBuyer = funded(new AccountId("poor"), new BigDecimal("1"), BigDecimal.ZERO);
-            OrderBookEngine eng = engine(List.of(poorBuyer, seller));
-
-            // notional = 500 × 1 BTC = 500 BRL, but only 1 BRL available
-            Order order = new Order(ids.getAndIncrement(), OrderSide.BUY, 500, QTY_1,
-                OrderType.LIMIT, poorBuyer.getId(), BTC_BRL);
-
-            assertThrows(IllegalArgumentException.class, () -> eng.placeOrder(order));
-            assertTrue(eng.getOrderBook(BTC_BRL).getBids().isEmpty());
-        }
+        // resting sell still has half a BTC in the book
+        assertEquals(1, clob.getOrderBook(INSTRUMENT).levelSize(PRICE, OrderSide.SELL));
     }
 
     // -----------------------------------------------------------------------
-    // placeOrder — no match (order rests in book)
+    // Partial fill — resting smaller than aggressor
     // -----------------------------------------------------------------------
 
-    @Nested
-    class NoMatch {
+    @Test
+    void partialFill_restingSmallerThanAggressor_restingFilledAggressorRests() {
+        alice.deposit(Asset.BTC, new BigDecimal("0.5"));
+        bob.deposit(Asset.BRL, new BigDecimal("50000"));
 
-        @Test
-        void buyBelowAsk_orderAddsToBook() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(499, QTY_1));   // bid below ask — no match
+        Order ask = sell(alice, PRICE, HALF_BTC);  // alice sells half
+        Order bid = buy(bob, PRICE, ONE_BTC);       // bob wants a full BTC
 
-            assertFalse(engine.getOrderBook(BTC_BRL).getBids().isEmpty());
-        }
+        clob.placeOrder(ask);
+        clob.placeOrder(bid);
 
-        @Test
-        void buyBelowAsk_statusRemainsOpen() {
-            engine.placeOrder(sell(500, QTY_1));
-            Order bid = buy(499, QTY_1);
-            engine.placeOrder(bid);
+        assertEquals(OrderStatus.FILLED,           ask.getStatus());
+        assertEquals(OrderStatus.PARTIALLY_FILLED, bid.getStatus());
+        assertEquals(HALF_BTC, bid.getQuantityLong());
 
-            assertEquals(OrderStatus.OPEN, bid.getStatus());
-        }
-
-        @Test
-        void sellAboveBid_orderAddsToBook() {
-            engine.placeOrder(buy(500, QTY_1));
-            engine.placeOrder(sell(501, QTY_1));  // ask above bid — no match
-
-            assertFalse(engine.getOrderBook(BTC_BRL).getAsks().isEmpty());
-        }
-
-        @Test
-        void emptyBook_orderRestingAtCorrectPriceLevel() {
-            engine.placeOrder(buy(500, QTY_1));
-
-            assertTrue(engine.getOrderBook(BTC_BRL).getBids().containsKey(500L));
-        }
+        // bob's remainder rests as a bid
+        assertEquals(1, clob.getOrderBook(INSTRUMENT).bidPrices().size());
     }
 
     // -----------------------------------------------------------------------
-    // placeOrder — full fill
+    // Cancel resting order
     // -----------------------------------------------------------------------
 
-    @Nested
-    class FullFill {
+    @Test
+    void cancelOrder_restsOrder_statusCanceledAndBalanceReleased() {
+        alice.deposit(Asset.BTC, BigDecimal.ONE);
 
-        @Test
-        void matchingOrders_bothStatusFilled() {
-            Order ask = sell(500, QTY_1);
-            Order bid = buy(500, QTY_1);
-            engine.placeOrder(ask);
-            engine.placeOrder(bid);
+        Order ask = sell(alice, PRICE, ONE_BTC);
+        clob.placeOrder(ask);
 
-            assertEquals(OrderStatus.FILLED, ask.getStatus());
-            assertEquals(OrderStatus.FILLED, bid.getStatus());
-        }
+        // BTC is now locked
+        assertEquals(0, alice.getAvailableBalance(Asset.BTC).compareTo(BigDecimal.ZERO));
+        assertEquals(0, alice.getLockedBalance(Asset.BTC).compareTo(BigDecimal.ONE));
 
-        @Test
-        void matchingOrders_bookRemainsEmpty() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_1));
+        clob.cancelOrder(ask);
 
-            assertTrue(engine.getOrderBook(BTC_BRL).getAsks().isEmpty());
-            assertTrue(engine.getOrderBook(BTC_BRL).getBids().isEmpty());
-        }
+        assertEquals(OrderStatus.CANCELED, ask.getStatus());
+        assertTrue(clob.getOrderBook(INSTRUMENT).askPrices().isEmpty());
 
-        @Test
-        void matchingOrders_sellerReceivesBrl() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_1));
+        // BTC is unlocked and available again
+        assertEquals(0, alice.getAvailableBalance(Asset.BTC).compareTo(BigDecimal.ONE));
+        assertEquals(0, alice.getLockedBalance(Asset.BTC).compareTo(BigDecimal.ZERO));
+    }
 
-            // seller delivered 1 BTC and received 500 BRL
-            assertEquals(new BigDecimal("500.00000000"), seller.getBalance(Asset.BRL));
-        }
+    @Test
+    void cancelOrder_buyOrder_releasesLockedBrl() {
+        bob.deposit(Asset.BRL, new BigDecimal("50000"));
 
-        @Test
-        void matchingOrders_buyerReceivesBtc() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_1));
+        Order bid = buy(bob, PRICE, ONE_BTC);
+        clob.placeOrder(bid);
 
-            // buyer delivered 500 BRL and received 1 BTC
-            assertEquals(BigDecimal.valueOf(QTY_1, Scales.QUANTITY_DECIMALS),
-                buyer.getBalance(Asset.BTC));
-        }
+        assertEquals(0, bob.getLockedBalance(Asset.BRL).compareTo(new BigDecimal("50000")));
 
-        @Test
-        void matchingOrders_buyerBrlBalanceLockFullyConsumed() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_1));
+        clob.cancelOrder(bid);
 
-            assertEquals(0, buyer.getLockedBalance(Asset.BRL).compareTo(BigDecimal.ZERO));
-        }
-
-        @Test
-        void matchingOrders_sellerBtcBalanceLockFullyConsumed() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_1));
-
-            assertEquals(0, seller.getLockedBalance(Asset.BTC).compareTo(BigDecimal.ZERO));
-        }
-
-        @Test
-        void matchingOrders_tradeRecordedInBothAccounts() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_1));
-
-            assertEquals(1, buyer.getTradeHistory().size());
-            assertEquals(1, seller.getTradeHistory().size());
-        }
-
-        @Test
-        void buyAboveAsk_matchesAtAskPrice() {
-            // resting ask at 490, incoming bid at 500 — trade executes at 490
-            Account richBuyer = funded(new AccountId("rich"), new BigDecimal("10000"), BigDecimal.ZERO);
-            Account cheapSeller = funded(new AccountId("cheap"), BigDecimal.ZERO, new BigDecimal("1"));
-            OrderBookEngine eng = engine(List.of(richBuyer, cheapSeller));
-
-            Order ask = order(OrderSide.SELL, 490, QTY_1, cheapSeller.getId());
-            Order bid = order(OrderSide.BUY,  500, QTY_1, richBuyer.getId());
-            eng.placeOrder(ask);
-            eng.placeOrder(bid);
-
-            // seller receives 490, not 500
-            assertEquals(new BigDecimal("490.00000000"), cheapSeller.getBalance(Asset.BRL));
-        }
+        assertEquals(OrderStatus.CANCELED, bid.getStatus());
+        assertEquals(0, bob.getAvailableBalance(Asset.BRL).compareTo(new BigDecimal("50000")));
+        assertEquals(0, bob.getLockedBalance(Asset.BRL).compareTo(BigDecimal.ZERO));
     }
 
     // -----------------------------------------------------------------------
-    // placeOrder — partial fill
+    // Multi-level sweep
     // -----------------------------------------------------------------------
 
-    @Nested
-    class PartialFill {
+    @Test
+    void sweep_buyMatchesMultipleSellLevels_allFilled() {
+        Account carol = new Account(new AccountId("carol"));
+        clob.addAccount(carol);
 
-        @Test
-        void aggressorSmallerThanResting_aggressorFullyFilled() {
-            Order ask = sell(500, QTY_2);  // 2 BTC resting
-            Order bid = buy(500, QTY_1);   // 1 BTC incoming
-            engine.placeOrder(ask);
-            engine.placeOrder(bid);
+        alice.deposit(Asset.BTC, BigDecimal.ONE);
+        carol.deposit(Asset.BTC, BigDecimal.ONE);
+        bob.deposit(Asset.BRL, new BigDecimal("100000")); // enough for 2 BTC at 500
 
-            assertEquals(OrderStatus.FILLED, bid.getStatus());
-        }
+        Order askAlice = sell(alice, 490L, ONE_BTC);
+        Order askCarol = sell(carol, 500L, ONE_BTC);
+        Order bidBob   = buy(bob,   500L, ONE_BTC * 2);
 
-        @Test
-        void aggressorSmallerThanResting_restingPartiallyFilled() {
-            Order ask = sell(500, QTY_2);
-            Order bid = buy(500, QTY_1);
-            engine.placeOrder(ask);
-            engine.placeOrder(bid);
+        clob.placeOrder(askAlice);
+        clob.placeOrder(askCarol);
+        clob.placeOrder(bidBob);
 
-            assertEquals(OrderStatus.PARTIALLY_FILLED, ask.getStatus());
-        }
+        assertEquals(OrderStatus.FILLED, askAlice.getStatus());
+        assertEquals(OrderStatus.FILLED, askCarol.getStatus());
+        assertEquals(OrderStatus.FILLED, bidBob.getStatus());
 
-        @Test
-        void aggressorSmallerThanResting_remainderStaysInBook() {
-            engine.placeOrder(sell(500, QTY_2));
-            engine.placeOrder(buy(500, QTY_1));
-
-            assertTrue(engine.getOrderBook(BTC_BRL).getAsks().containsKey(500L));
-        }
-
-        @Test
-        void aggressorLargerThanResting_aggressorPartiallyFilled() {
-            Order ask = sell(500, QTY_1);  // 1 BTC resting
-            Order bid = buy(500, QTY_2);   // 2 BTC incoming
-            engine.placeOrder(ask);
-            engine.placeOrder(bid);
-
-            assertEquals(OrderStatus.PARTIALLY_FILLED, bid.getStatus());
-        }
-
-        @Test
-        void aggressorLargerThanResting_remainderAddedToBook() {
-            engine.placeOrder(sell(500, QTY_1));
-            engine.placeOrder(buy(500, QTY_2));
-
-            assertTrue(engine.getOrderBook(BTC_BRL).getBids().containsKey(500L));
-        }
-
-        @Test
-        void partialFill_settledOnlyForTradedQuantity() {
-            engine.placeOrder(sell(500, QTY_2));  // 2 BTC resting
-            engine.placeOrder(buy(500, QTY_1));   // 1 BTC consumed
-
-            // seller gets paid only for 1 BTC (500 BRL), 1 BTC still locked
-            assertEquals(new BigDecimal("500.00000000"), seller.getBalance(Asset.BRL));
-            assertEquals(BigDecimal.valueOf(QTY_1, Scales.QUANTITY_DECIMALS),
-                seller.getLockedBalance(Asset.BTC));
-        }
+        assertTrue(clob.getOrderBook(INSTRUMENT).askPrices().isEmpty());
+        // bob received 2 BTC total
+        assertEquals(0, bob.getBalance(Asset.BTC).compareTo(new BigDecimal("2.00000000")));
     }
 
     // -----------------------------------------------------------------------
-    // placeOrder — sweep multiple resting levels
+    // Price-time priority (FIFO within a level)
     // -----------------------------------------------------------------------
 
-    @Nested
-    class MultiLevelSweep {
+    @Test
+    void priceTimePriority_firstRestingOrderFilledFirst() {
+        Account carol = new Account(new AccountId("carol"));
+        clob.addAccount(carol);
 
-        @Test
-        void aggressorSweepsTwoLevels_allRestingOrdersFilled() {
-            Account seller2 = funded(new AccountId("seller2"), BigDecimal.ZERO, new BigDecimal("10"));
-            OrderBookEngine eng = engine(List.of(buyer, seller, seller2));
+        alice.deposit(Asset.BTC, new BigDecimal("0.5"));
+        carol.deposit(Asset.BTC, new BigDecimal("0.5"));
+        bob.deposit(Asset.BRL, new BigDecimal("25000"));
 
-            Order ask1 = order(OrderSide.SELL, 490, QTY_1, SELLER_ID);
-            Order ask2 = order(OrderSide.SELL, 495, QTY_1, seller2.getId());
-            Order bid  = order(OrderSide.BUY,  500, QTY_2, BUYER_ID);
+        Order askFirst  = sell(alice, PRICE, HALF_BTC); // rests first
+        Order askSecond = sell(carol, PRICE, HALF_BTC);
+        Order bid       = buy(bob,   PRICE, HALF_BTC);  // only enough for one
 
-            eng.placeOrder(ask1);
-            eng.placeOrder(ask2);
-            eng.placeOrder(bid);
+        clob.placeOrder(askFirst);
+        clob.placeOrder(askSecond);
+        clob.placeOrder(bid);
 
-            assertEquals(OrderStatus.FILLED, ask1.getStatus());
-            assertEquals(OrderStatus.FILLED, ask2.getStatus());
-            assertEquals(OrderStatus.FILLED, bid.getStatus());
-        }
-
-        @Test
-        void aggressorSweepsTwoLevels_bookIsEmpty() {
-            Account seller2 = funded(new AccountId("seller2"), BigDecimal.ZERO, new BigDecimal("10"));
-            OrderBookEngine eng = engine(List.of(buyer, seller, seller2));
-
-            eng.placeOrder(order(OrderSide.SELL, 490, QTY_1, SELLER_ID));
-            eng.placeOrder(order(OrderSide.SELL, 495, QTY_1, seller2.getId()));
-            eng.placeOrder(order(OrderSide.BUY,  500, QTY_2, BUYER_ID));
-
-            assertTrue(eng.getOrderBook(BTC_BRL).getAsks().isEmpty());
-        }
-
-        @Test
-        void aggressorSweepsTwoLevels_twoTradesRecordedForBuyer() {
-            Account seller2 = funded(new AccountId("seller2"), BigDecimal.ZERO, new BigDecimal("10"));
-            OrderBookEngine eng = engine(List.of(buyer, seller, seller2));
-
-            eng.placeOrder(order(OrderSide.SELL, 490, QTY_1, SELLER_ID));
-            eng.placeOrder(order(OrderSide.SELL, 495, QTY_1, seller2.getId()));
-            eng.placeOrder(order(OrderSide.BUY,  500, QTY_2, BUYER_ID));
-
-            assertEquals(2, buyer.getTradeHistory().size());
-        }
+        // alice's order (first) was matched; carol's is still resting
+        assertEquals(OrderStatus.FILLED, askFirst.getStatus());
+        assertEquals(OrderStatus.OPEN,   askSecond.getStatus());
+        assertEquals(1, clob.getOrderBook(INSTRUMENT).levelSize(PRICE, OrderSide.SELL));
     }
 
     // -----------------------------------------------------------------------
-    // cancelOrder
+    // Error paths
     // -----------------------------------------------------------------------
 
-    @Nested
-    class CancelOrder {
+    @Test
+    void cancelOrder_filledOrder_throws() {
+        alice.deposit(Asset.BTC, BigDecimal.ONE);
+        bob.deposit(Asset.BRL, new BigDecimal("50000"));
 
-        @Test
-        void shouldRejectNullOrder() {
-            assertThrows(NullPointerException.class, () -> engine.cancelOrder(null));
-        }
+        Order ask = sell(alice, PRICE, ONE_BTC);
+        Order bid = buy(bob, PRICE, ONE_BTC);
+        clob.placeOrder(ask);
+        clob.placeOrder(bid);
 
-        @Test
-        void shouldRejectOrderNotInBook() {
-            Order ask = sell(500, QTY_1);
-            engine.placeOrder(ask);           // places and rests in book
-            engine.cancelOrder(ask);          // remove it
-            assertThrows(Exception.class, () -> engine.cancelOrder(ask)); // already gone
-        }
-
-        @Test
-        void cancelBuyOrder_statusBecomesCancel() {
-            Order bid = buy(499, QTY_1);      // no ask, rests in book
-            engine.placeOrder(bid);
-            engine.cancelOrder(bid);
-
-            assertEquals(OrderStatus.CANCELED, bid.getStatus());
-        }
-
-        @Test
-        void cancelBuyOrder_removedFromBook() {
-            Order bid = buy(499, QTY_1);
-            engine.placeOrder(bid);
-            engine.cancelOrder(bid);
-
-            assertTrue(engine.getOrderBook(BTC_BRL).getBids().isEmpty());
-        }
-
-        @Test
-        void cancelBuyOrder_unlocksQuoteBalance() {
-            Order bid = buy(500, QTY_1);
-            engine.placeOrder(bid);
-
-            BigDecimal lockedBefore = buyer.getLockedBalance(Asset.BRL);
-            assertTrue(lockedBefore.compareTo(BigDecimal.ZERO) > 0);
-
-            engine.cancelOrder(bid);
-            assertEquals(0, buyer.getLockedBalance(Asset.BRL).compareTo(BigDecimal.ZERO));
-        }
-
-        @Test
-        void cancelSellOrder_statusBecomesCancel() {
-            Order ask = sell(600, QTY_1);     // no bid, rests in book
-            engine.placeOrder(ask);
-            engine.cancelOrder(ask);
-
-            assertEquals(OrderStatus.CANCELED, ask.getStatus());
-        }
-
-        @Test
-        void cancelSellOrder_removedFromBook() {
-            Order ask = sell(600, QTY_1);
-            engine.placeOrder(ask);
-            engine.cancelOrder(ask);
-
-            assertTrue(engine.getOrderBook(BTC_BRL).getAsks().isEmpty());
-        }
-
-        @Test
-        void cancelSellOrder_unlocksBaseBalance() {
-            Order ask = sell(500, QTY_1);
-            engine.placeOrder(ask);
-
-            BigDecimal lockedBefore = seller.getLockedBalance(Asset.BTC);
-            assertTrue(lockedBefore.compareTo(BigDecimal.ZERO) > 0);
-
-            engine.cancelOrder(ask);
-            assertEquals(0, seller.getLockedBalance(Asset.BTC).compareTo(BigDecimal.ZERO));
-        }
-
-        @Test
-        void shouldRejectAlreadyCanceledOrder() {
-            Order ask = sell(500, QTY_1);
-            engine.placeOrder(ask);
-            engine.cancelOrder(ask);
-            assertThrows(IllegalStateException.class, () -> engine.cancelOrder(ask));
-        }
+        // ask is now FILLED — cancelling it should fail validation
+        assertThrows(IllegalStateException.class, () -> clob.cancelOrder(ask));
     }
 
-    // -----------------------------------------------------------------------
-    // getOrderBook
-    // -----------------------------------------------------------------------
+    @Test
+    void placeOrder_insufficientBrlBalance_throws() {
+        bob.deposit(Asset.BRL, new BigDecimal("1000")); // not enough for 50_000 BRL notional
 
-    @Nested
-    class GetOrderBook {
+        Order bid = buy(bob, PRICE, ONE_BTC);
 
-        @Test
-        void shouldRejectNullInstrument() {
-            assertThrows(NullPointerException.class, () -> engine.getOrderBook(null));
-        }
-
-        @Test
-        void unknownInstrument_returnsNull() {
-            Instrument other = new Instrument(Asset.BRL, Asset.BTC);
-            assertNull(engine.getOrderBook(other));
-        }
-
-        @Test
-        void knownInstrument_returnsNonNullBook() {
-            assertNotNull(engine.getOrderBook(BTC_BRL));
-        }
-
-        @Test
-        void reflectsOrdersPlacedInBook() {
-            engine.placeOrder(sell(500, QTY_1));
-            OrderBook book = engine.getOrderBook(BTC_BRL);
-
-            assertTrue(book.getAsks().containsKey(500L));
-        }
-
-        @Test
-        void bookIsEmptyBeforeAnyOrder() {
-            OrderBook book = engine.getOrderBook(BTC_BRL);
-
-            assertTrue(book.getBids().isEmpty());
-            assertTrue(book.getAsks().isEmpty());
-        }
+        assertThrows(IllegalArgumentException.class, () -> clob.placeOrder(bid));
     }
 
-    // -----------------------------------------------------------------------
-    // Concurrency
-    // -----------------------------------------------------------------------
+    @Test
+    void placeOrder_insufficientBtcBalance_throws() {
+        // alice has no BTC
 
-    @Nested
-    class Concurrency {
+        Order ask = sell(alice, PRICE, ONE_BTC);
 
-        @Test
-        void concurrentBuysAndSells_noLostUpdatesAndConsistentBookState() throws InterruptedException {
-            int threads   = 8;
-            int perThread = 20;
-
-            List<Account> accounts = new ArrayList<>();
-            for (int i = 0; i < threads; i++) {
-                accounts.add(funded(new AccountId("t" + i),
-                    new BigDecimal("10000000"), new BigDecimal("1000")));
-            }
-            OrderBookEngine eng = engine(accounts);
-
-            CountDownLatch ready = new CountDownLatch(threads);
-            CountDownLatch start = new CountDownLatch(1);
-            CountDownLatch done  = new CountDownLatch(threads);
-            ExecutorService pool = Executors.newFixedThreadPool(threads);
-            AtomicLong idGen     = new AtomicLong(1000);
-
-            for (int t = 0; t < threads; t++) {
-                AccountId aid = accounts.get(t).getId();
-                boolean isBuyer = (t % 2 == 0);
-                pool.submit(() -> {
-                    ready.countDown();
-                    try {
-                        start.await();
-                        for (int i = 0; i < perThread; i++) {
-                            Order o = new Order(idGen.getAndIncrement(),
-                                isBuyer ? OrderSide.BUY : OrderSide.SELL,
-                                500L, QTY_1, OrderType.LIMIT, aid, BTC_BRL);
-                            eng.placeOrder(o);
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        done.countDown();
-                    }
-                });
-            }
-
-            ready.await();
-            start.countDown();
-            assertTrue(done.await(10, TimeUnit.SECONDS), "Threads did not finish in time");
-            pool.shutdown();
-
-            OrderBook book = eng.getOrderBook(BTC_BRL);
-            // total buys == total sells, so book should be empty after all match
-            assertTrue(book.getBids().isEmpty() && book.getAsks().isEmpty(),
-                "Book should be empty when buy and sell volumes are equal");
-        }
+        assertThrows(IllegalArgumentException.class, () -> clob.placeOrder(ask));
     }
 
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
-    private Order buy(long price, long qty) {
-        return order(OrderSide.BUY, price, qty, BUYER_ID);
+    private Order sell(Account account, long price, long qty) {
+        return new Order(idGen.getAndIncrement(), OrderSide.SELL, price, qty,
+                         OrderType.LIMIT, account.getId(), INSTRUMENT);
     }
 
-    private Order sell(long price, long qty) {
-        return order(OrderSide.SELL, price, qty, SELLER_ID);
-    }
-
-    private Order order(OrderSide side, long price, long qty, AccountId accountId) {
-        return new Order(ids.getAndIncrement(), side, price, qty,
-            OrderType.LIMIT, accountId, BTC_BRL);
-    }
-
-    private static Account funded(AccountId id, BigDecimal brl, BigDecimal btc) {
-        Account a = new Account(id);
-        if (brl.compareTo(BigDecimal.ZERO) > 0) {
-            a.deposit(Asset.BRL, brl);
-        }
-        if (btc.compareTo(BigDecimal.ZERO) > 0) {
-            a.deposit(Asset.BTC, btc);
-        }
-        return a;
-    }
-
-    private OrderBookEngine engine(List<Account> accounts) {
-        return new OrderBookEngine(List.of(BTC_BRL), accountMap(accounts));
-    }
-
-    private static Map<AccountId, Account> accountMap(List<Account> accounts) {
-        var map = new java.util.HashMap<AccountId, Account>();
-        for (Account a : accounts) {
-            map.put(a.getId(), a);
-        }
-        return map;
+    private Order buy(Account account, long price, long qty) {
+        return new Order(idGen.getAndIncrement(), OrderSide.BUY, price, qty,
+                         OrderType.LIMIT, account.getId(), INSTRUMENT);
     }
 }

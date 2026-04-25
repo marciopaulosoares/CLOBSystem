@@ -12,9 +12,8 @@ import com.mb.crypto.clob.domain.Scales;
 import com.mb.crypto.clob.orderbook.OrderBook;
 
 import java.math.BigDecimal;
-import java.util.ArrayDeque;
 import java.util.List;
-import java.util.Map;
+import java.util.NavigableSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class Main {
@@ -113,12 +112,12 @@ public class Main {
         Order ask = order(alice, OrderSide.SELL, 500, 1 * Scales.QUANTITY_SCALE);
         clob.placeOrder(ask);
         System.out.printf("before cancel — book asks: %d level(s)%n",
-                clob.getOrderBook(BTC_BRL).getAsks().size());
+                clob.getOrderBook(BTC_BRL).askPrices().size());
 
         clob.cancelOrder(ask);
         printStatus("alice ask", ask);
         System.out.printf("after cancel  — book asks: %d level(s)%n%n",
-                clob.getOrderBook(BTC_BRL).getAsks().size());
+                clob.getOrderBook(BTC_BRL).askPrices().size());
     }
 
     // -----------------------------------------------------------------------
@@ -177,15 +176,17 @@ public class Main {
 
     static void printBook(OrderBook book) {
         System.out.println("  order book:");
-        Map<Long, ArrayDeque<Order>> asks = book.getAsks();
-        Map<Long, ArrayDeque<Order>> bids = book.getBids();
+        NavigableSet<Long> asks = book.askPrices();
+        NavigableSet<Long> bids = book.bidPrices();
         if (asks.isEmpty() && bids.isEmpty()) {
             System.out.println("    (empty)");
             return;
         }
-        asks.forEach((price, q) ->
-                System.out.printf("    ASK %5d BRL  qty=%d orders%n", price, q.size()));
-        bids.forEach((price, q) ->
-                System.out.printf("    BID %5d BRL  qty=%d orders%n", price, q.size()));
+        asks.forEach(price ->
+                System.out.printf("    ASK %5d BRL  qty=%d orders%n", price,
+                        book.levelSize(price, OrderSide.SELL)));
+        bids.forEach(price ->
+                System.out.printf("    BID %5d BRL  qty=%d orders%n", price,
+                        book.levelSize(price, OrderSide.BUY)));
     }
 }
